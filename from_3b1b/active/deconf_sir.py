@@ -135,5 +135,47 @@ class PartiallyRespectedMeasures(RunSimpleDeconfSimulation):
             DisrespectfulCitizen: 0.5}
         }
     }
+    
+class ToggledConfinement(RunSimpleSimulation):
+    CONFIG = {
+        "simulation_config": {
+            "p_infection_per_day": 0.2
+        },
+        "activation_treshold": 10}
+    
+    def construct(self):
+        self.confinement = False
+        for person in self.simulation.people:
+            person.social_distance_factor=0
+            
+        self.run_until_zero_infections()
+    def check_if_confinement(self):
+        
+        infected_count = self.simulation.get_status_counts()[1]
+        
+        if not self.confinement:
+            if infected_count > self.activation_treshold:
+                for person in self.simulation.people:
+                    person.social_distance_factor=1
+                self.confinement = True
+        else:
+            if infected_count < self.activation_treshold:
+                for person in self.simulation.people:
+                    person.social_distance_factor=0
+                self.confinement = False
+    
+    def run_until_zero_infections(self):
+        while True:
+            self.wait(5)
+            self.check_if_confinement()
+            if self.simulation.get_status_counts()[1] == 0:
+                self.wait(5)
+                break
+
+            
+    
+    
+    
+    
 
 
