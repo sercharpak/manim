@@ -8,7 +8,40 @@
 
 Manim is an animation engine for explanatory math videos. It's used to create precise animations programmatically, as seen in the videos at [3Blue1Brown](https://www.3blue1brown.com/).
 
-## Installation
+## About this fork - [Simulation of deconfinement strategies](https://devpost.com/software/proposal-simulation-of-deconfinement-strategies-jy3ctf)
+We are currently participating in the [Lauzhack-Covid19](https://covid19.lauzhack.com/) hackaton. Inspired by [3Blue1Brown](https://www.3blue1brown.com/)'s [video](https://www.youtube.com/watch?v=gxAaO2rsdIs) about simulating an epidemic. We decided to try and push further and investigate the effect of various deconfinement strategies, using as a base his work.
+
+## Installation of this fork
+Tested on Debian 9 (stretch), Ubuntu (18) and Debian 10 (buster):
+First, be sure to have installed:
+* [cairo](https://www.cairographics.org)
+* [ffmpeg](https://www.ffmpeg.org)
+* [sox](http://sox.sourceforge.net)
+* [latex](https://www.latex-project.org)
+
+Using *Anaconda3* (based on the original installation instructions):
+* Clone the repository: `git clone git@github.com:sercharpak/manim.git`
+* Choose the branch: `git pull origin shaders`
+* Go to the main folder: `cd manim`
+* Create the environment: `conda env create -f environment.yml`
+* Activate it: `conda activate manim`
+* [Optional] Install ffmpeg with conda, specifying the codec: `conda install x264=='1!152.20180717' ffmpeg=4.0.2 -c conda-forge`
+* Install ipython: `conda install -c anaconda ipython`
+* Install moderngl: `conda install -c conda-forge moderngl`
+* Install mapbox earcut: `pip install mapbox_earcut`
+* Install moderngl window: `pip install moderngl_window`
+
+This [change](https://github.com/3b1b/manim/pull/950/files) solved an error related to OpenGL and the classic driver-GPU-Graphics-Linux struggle.
+
+## Running instructions
+* Activate the environment: `conda activate manim`
+* Go to the manim main folder: `cd manim`
+* See the available scenes with: `python3 -m manim from_3b1b/active/sir.py`
+* See the help options with: `python3 -m manim from_3b1b/active/sir.py --help`
+* Example of a simulation (original _CentralMarketLargePopulation_ scene) by specifying an output media directory and with no window open by: `python3 -m manim from_3b1b/active/sir.py CentralMarketLargePopulation --media_dir /output/custum/media_dir/test_sim --show_file_in_finder`
+
+
+## Original Installation Instructions
 Manim runs on Python 3.7. You can install it from PyPI via pip:
 
 ```sh
@@ -58,9 +91,9 @@ python3 ./manim.py example_scenes.py SquareToCircle -pl
 
 ## Anaconda Install
 
-* Install sox and latex as above. 
+* Install sox and latex as above.
 * Create a conda environment using `conda env create -f environment.yml`
-* **WINDOWS ONLY** Install `pyreadline` via `pip install pyreadline`. 
+* **WINDOWS ONLY** Install `pyreadline` via `pip install pyreadline`.
 
 
 ### Using `virtualenv` and `virtualenvwrapper`
