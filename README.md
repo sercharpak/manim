@@ -21,7 +21,6 @@ First, be sure to have installed:
 
 Using *Anaconda3* (based on the original installation instructions):
 * Clone the repository: `git clone git@github.com:sercharpak/manim.git`
-* Choose the branch: `git pull origin shaders`
 * Go to the main folder: `cd manim`
 * Create the environment: `conda env create -f environment.yml`
 * Activate it: `conda activate manim`
