@@ -89,11 +89,10 @@ class DrawBorderThenFill(Animation):
     def interpolate_submobject(self, submob, start, outline, alpha):
         index, subalpha = integer_interpolate(0, 2, alpha)
         if index == 0:
-            submob.pointwise_become_partial(
-                outline, 0, subalpha
-            )
+            submob.pointwise_become_partial(outline, 0, subalpha)
             submob.match_style(outline)
         else:
+            submob.pointwise_become_partial(outline, 0, 1)
             submob.interpolate(outline, start, subalpha)
 
 
@@ -138,7 +137,7 @@ class ShowIncreasingSubsets(Animation):
         self.update_submobject_list(index)
 
     def update_submobject_list(self, index):
-        self.mobject.submobjects = self.all_submobs[:index]
+        self.mobject.set_submobjects(self.all_submobs[:index])
 
 
 class ShowSubmobjectsOneByOne(ShowIncreasingSubsets):
@@ -153,9 +152,9 @@ class ShowSubmobjectsOneByOne(ShowIncreasingSubsets):
     def update_submobject_list(self, index):
         # N = len(self.all_submobs)
         if index == 0:
-            self.mobject.submobjects = []
+            self.mobject.set_submobjects([])
         else:
-            self.mobject.submobjects = self.all_submobs[index - 1]
+            self.mobject.set_submobjects(self.all_submobs[index - 1])
 
 
 # TODO, this is broken...

@@ -9,6 +9,7 @@ from manimlib.utils.config_ops import digest_config
 # map their centers but remain otherwise undistorted (useful for labels, etc.)
 
 
+# TODO, this class is deprecated
 class MappingCamera(Camera):
     CONFIG = {
         "mapping_func": lambda p: p,
@@ -31,7 +32,6 @@ class MappingCamera(Camera):
                 mobject.insert_n_curves(self.min_num_curves)
         Camera.capture_mobjects(
             self, mobject_copies,
-            include_submobjects=False,
             excluded_mobjects=None,
         )
 
@@ -104,7 +104,7 @@ class SplitScreenCamera(OldMultiCamera):
         half_width = self.get_pixel_width() / 2
         for camera in [self.left_camera, self.right_camera]:
             # TODO: Round up on one if width is odd
-            camera.reset_pixel_shape(camera.get_pixel_height(), half_width)
+            camera.reset_pixel_shape(half_width, camera.get_pixel_height())
 
         OldMultiCamera.__init__(
             self,

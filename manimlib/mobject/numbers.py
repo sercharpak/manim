@@ -3,6 +3,7 @@ from manimlib.mobject.svg.tex_mobject import SingleStringTexMobject
 from manimlib.mobject.types.vectorized_mobject import VMobject
 
 
+# TODO, have this cache TexMobjects
 class DecimalNumber(VMobject):
     CONFIG = {
         "num_decimal_places": 2,
@@ -63,7 +64,7 @@ class DecimalNumber(VMobject):
         for i, c in enumerate(num_string):
             if c == "-" and len(num_string) > i + 1:
                 self[i].align_to(self[i + 1], UP)
-                self[i].shift(self[i+1].get_height() * DOWN / 2)
+                self[i].shift(self[i + 1].get_height() * DOWN / 2)
             elif c == ",":
                 self[i].shift(self[i].get_height() * DOWN / 2)
         if self.unit and self.unit.startswith("^"):
@@ -121,7 +122,7 @@ class DecimalNumber(VMobject):
         new_decimal.match_style(self)
 
         old_family = self.get_family()
-        self.submobjects = new_decimal.submobjects
+        self.set_submobjects(new_decimal.submobjects)
         for mob in old_family:
             # Dumb hack...due to how scene handles families
             # of animated mobjects

@@ -2,10 +2,13 @@ from manimlib.constants import *
 from manimlib.mobject.geometry import Square
 from manimlib.mobject.types.vectorized_mobject import VGroup
 from manimlib.mobject.types.vectorized_mobject import VMobject
-from manimlib.utils.iterables import tuplify
+from manimlib.utils.iterables import listify
 from manimlib.utils.space_ops import z_to_vector
 
 ##############
+
+
+# TODO, replace these with a special 3d type, not VMobject
 
 
 class ThreeDVMobject(VMobject):
@@ -40,7 +43,7 @@ class ParametricSurface(VGroup):
             self.make_jagged()
 
     def get_u_values_and_v_values(self):
-        res = tuplify(self.resolution)
+        res = listify(self.resolution)
         if len(res) == 1:
             u_res = v_res = res[0]
         else:
@@ -132,7 +135,7 @@ class Cube(VGroup):
         "side_length": 2,
     }
 
-    def generate_points(self):
+    def init_points(self):
         for vect in IN, OUT, LEFT, RIGHT, UP, DOWN:
             face = Square(
                 side_length=self.side_length,
@@ -150,7 +153,7 @@ class Prism(Cube):
         "dimensions": [3, 2, 1]
     }
 
-    def generate_points(self):
-        Cube.generate_points(self)
+    def init_points(self):
+        Cube.init_points(self)
         for dim, value in enumerate(self.dimensions):
             self.rescale_to_fit(value, dim, stretch=True)

@@ -16,10 +16,9 @@ TEX_MOB_SCALE_FACTOR = 0.05
 
 
 class TexSymbol(VMobjectFromSVGPathstring):
-    """
-    Purely a renaming of VMobjectFromSVGPathstring
-    """
-    pass
+    CONFIG = {
+        "should_subdivide_sharp_curves": True,
+    }
 
 
 class SingleStringTexMobject(SVGMobject):
@@ -185,14 +184,14 @@ class TexMobject(SingleStringTexMobject):
                 # For cases like empty tex_strings, we want the corresponing
                 # part of the whole TexMobject to be a VectorizedPoint
                 # positioned in the right part of the TexMobject
-                sub_tex_mob.submobjects = [VectorizedPoint()]
+                sub_tex_mob.set_submobjects([VectorizedPoint()])
                 last_submob_index = min(curr_index, len(self.submobjects) - 1)
                 sub_tex_mob.move_to(self.submobjects[last_submob_index], RIGHT)
             else:
-                sub_tex_mob.submobjects = self.submobjects[curr_index:new_index]
+                sub_tex_mob.set_submobjects(self.submobjects[curr_index:new_index])
             new_submobjects.append(sub_tex_mob)
             curr_index = new_index
-        self.submobjects = new_submobjects
+        self.set_submobjects(new_submobjects)
         return self
 
     def get_parts_by_tex(self, tex, substring=True, case_sensitive=True):
@@ -205,7 +204,11 @@ class TexMobject(SingleStringTexMobject):
             else:
                 return tex1 == tex2
 
-        return VGroup(*[m for m in self.submobjects if test(tex, m.get_tex_string())])
+        return VGroup(*[
+            m
+            for m in self.submobjects
+            if isinstance(m, SingleStringTexMobject) and test(tex, m.get_tex_string())
+        ])
 
     def get_part_by_tex(self, tex, **kwargs):
         all_parts = self.get_parts_by_tex(tex, **kwargs)

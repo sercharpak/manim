@@ -2,6 +2,7 @@ from scipy import linalg
 import numpy as np
 
 from manimlib.utils.simple_functions import choose
+from manimlib.utils.space_ops import find_intersection
 
 CLOSED_THRESHOLD = 0.001
 
@@ -16,9 +17,9 @@ def bezier(points):
 
 def partial_bezier_points(points, a, b):
     """
-    Given an array of points which define
+    Given an list of points which define
     a bezier curve, and two numbers 0<=a<b<=1,
-    return an array of the same size, which
+    return an list of the same size, which
     describes the portion of the original bezier
     curve on the interval [a, b].
 
@@ -27,15 +28,15 @@ def partial_bezier_points(points, a, b):
     if a == 1:
         return [points[-1]] * len(points)
 
-    a_to_1 = np.array([
+    a_to_1 = [
         bezier(points[i:])(a)
         for i in range(len(points))
-    ])
+    ]
     end_prop = (b - a) / (1. - a)
-    return np.array([
+    return [
         bezier(a_to_1[:i + 1])(end_prop)
         for i in range(len(points))
-    ])
+    ]
 
 
 # Linear interpolation variants
@@ -159,3 +160,85 @@ def diag_to_matrix(l_and_u, diag):
 
 def is_closed(points):
     return np.allclose(points[0], points[-1])
+
+
+# Given 4 control points for a cubic bezier curve (or arrays of such)
+# return control points for 2 quadratics (or 2n quadratics) approximating them.
+def get_quadratic_approximation_of_cubic(a0, h0, h1, a1):
+    a0 = np.array(a0, ndmin=2)
+    h0 = np.array(h0, ndmin=2)
+    h1 = np.array(h1, ndmin=2)
+    a1 = np.array(a1, ndmin=2)
+    # Tangent vectors at the start and end.
+    T0 = h0 - a0
+    T1 = a1 - h1
+
+    # Search for inflection points.  If none are found, use the
+    # midpoint as a cut point.
+    # Based on http://www.caffeineowl.com/graphics/2d/vectorial/cubic-inflexion.html
+    has_infl = np.ones(len(a0), dtype=bool)
+
+    p = h0 - a0
+    q = h1 - 2 * h0 + a0
+    r = a1 - 3 * h1 + 3 * h0 - a0
+
+    def cross2d(v, w):
+        return v[:, 0] * w[:, 1] - v[:, 1] * w[:, 0]
+
+    a = cross2d(q, r)
+    b = cross2d(p, r)
+    c = cross2d(p, q)
+
+    disc = b * b - 4 * a * c
+    has_infl &= (disc > 0)
+    sqrt_disc = np.sqrt(abs(disc))
+    # print(a, b, c, sqrt_disc)
+    settings = np.seterr(all='ignore')
+    ti_min, ti_max = [
+        np.true_divide(
+            -b + sgn * sqrt_disc, 2 * a,
+            out=(-c / b),
+            where=(a != 0),
+        )
+        for sgn in [-1, +1]
+    ]
+    np.seterr(**settings)
+    ti_min_in_range = has_infl & (0 < ti_min) & (ti_min < 1)
+    ti_max_in_range = has_infl & (0 < ti_max) & (ti_max < 1)
+
+    # Choose a value of t which is starts as 0.5,
+    # but is updated to one of the inflection points
+    # if they lie between 0 and 1
+
+    t_mid = 0.5 * np.ones(len(a0))
+    t_mid[ti_min_in_range] = ti_min[ti_min_in_range]
+    t_mid[ti_max_in_range] = ti_max[ti_max_in_range]
+
+    m, n = a0.shape
+    t_mid = t_mid.repeat(n).reshape((m, n))
+
+    # Compute bezier point and tangent at the chosen value of t
+    mid = bezier([a0, h0, h1, a1])(t_mid)
+    Tm = bezier([h0 - a0, h1 - h0, a1 - h1])(t_mid)
+
+    # Intersection between tangent lines at end points
+    # and tangent in the middle
+    i0 = find_intersection(a0, T0, mid, Tm)
+    i1 = find_intersection(a1, T1, mid, Tm)
+
+    m, n = np.shape(a0)
+    result = np.zeros((6 * m, n))
+    result[0::6] = a0
+    result[1::6] = i0
+    result[2::6] = mid
+    result[3::6] = mid
+    result[4::6] = i1
+    result[5::6] = a1
+    return result
+
+
+def get_smooth_quadratic_bezier_path_through(points):
+    h0, h1 = get_smooth_handle_points(points)
+    a0 = points[:-1]
+    a1 = points[1:]
+    return get_quadratic_approximation_of_cubic(a0, h0, h1, a1)

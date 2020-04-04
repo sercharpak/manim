@@ -8,18 +8,7 @@ from manimlib.mobject.types.vectorized_mobject import VGroup
 from manimlib.utils.config_ops import digest_config
 
 
-# TODO, think about how to incorporate perspective
-class CameraFrame(VGroup):
-    CONFIG = {
-        "width": FRAME_WIDTH,
-        "height": FRAME_HEIGHT,
-        "center": ORIGIN,
-    }
-
-    def __init__(self, **kwargs):
-        pass
-
-
+# Depricated?
 class MovingCamera(Camera):
     """
     Stays in line with the height, width and position of it's 'frame', which is a Rectangle
@@ -64,11 +53,6 @@ class MovingCamera(Camera):
 
     def set_frame_center(self, frame_center):
         self.frame.move_to(frame_center)
-
-    def capture_mobjects(self, mobjects, **kwargs):
-        # self.reset_frame_center()
-        # self.realign_frame_shape()
-        Camera.capture_mobjects(self, mobjects, **kwargs)
 
     # Since the frame can be moving around, the cairo
     # context used for updating should be regenerated

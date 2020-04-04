@@ -57,23 +57,24 @@ class PiCreature(SVGMobject):
         try:
             svg_file = os.path.join(
                 PI_CREATURE_DIR,
-                "%s_%s.svg" % (self.file_name_prefix, mode)
+                f"{self.file_name_prefix}_{mode}.svg"
             )
             SVGMobject.__init__(self, file_name=svg_file, **kwargs)
         except Exception:
-            warnings.warn("No %s design with mode %s" %
-                          (self.file_name_prefix, mode))
-            # TODO, this needs to change to a different, better directory
+            warnings.warn(f"No {self.file_name_prefix} design with mode {mode}")
             svg_file = os.path.join(
-                FILE_DIR,
+                os.path.dirname(os.path.realpath(__file__)),
+                os.pardir,
+                "files",
                 "PiCreatures_plain.svg",
             )
-            SVGMobject.__init__(self, mode="plain", file_name=svg_file, **kwargs)
+            SVGMobject.__init__(self, file_name=svg_file, **kwargs)
 
         if self.flip_at_start:
             self.flip()
         if self.start_corner is not None:
             self.to_corner(self.start_corner)
+        self.unlock_triangulation()
 
     def align_data(self, mobject):
         # This ensures that after a transform into a different mode,
@@ -132,8 +133,8 @@ class PiCreature(SVGMobject):
             new_pupil.move_to(pupil)
             pupil.become(new_pupil)
             dot.shift(
-                new_pupil.get_boundary_point(UL) -
-                dot.get_boundary_point(UL)
+                new_pupil.point_from_proportion(3 / 8) -
+                dot.point_from_proportion(3 / 8)
             )
             pupil.add(dot)
 
@@ -148,9 +149,7 @@ class PiCreature(SVGMobject):
         return self
 
     def change_mode(self, mode):
-        new_self = self.__class__(
-            mode=mode,
-        )
+        new_self = self.__class__(mode=mode)
         new_self.match_style(self)
         new_self.match_height(self)
         if self.is_flipped() != new_self.is_flipped():
@@ -210,10 +209,11 @@ class PiCreature(SVGMobject):
 
     def blink(self):
         eye_parts = self.eye_parts
-        eye_bottom_y = eye_parts.get_bottom()[1]
-        eye_parts.apply_function(
-            lambda p: [p[0], eye_bottom_y, p[2]]
-        )
+        eye_bottom_y = eye_parts.get_y(DOWN)
+
+        for eye_part in eye_parts.family_members_with_points():
+            eye_part.points[:, 1] = eye_bottom_y
+
         return self
 
     def to_corner(self, vect=None, **kwargs):
@@ -260,10 +260,16 @@ class PiCreature(SVGMobject):
             for alpha_range in (self.right_arm_range, self.left_arm_range)
         ])
 
+    def prepare_for_animation(self):
+        self.unlock_triangulation()
+
+    def cleanup_from_animation(self):
+        self.lock_triangulation()
+
 
 def get_all_pi_creature_modes():
     result = []
-    prefix = "%s_" % PiCreature.CONFIG["file_name_prefix"]
+    prefix = PiCreature.CONFIG["file_name_prefix"] + "_"
     suffix = ".svg"
     for file in os.listdir(PI_CREATURE_DIR):
         if file.startswith(prefix) and file.endswith(suffix):

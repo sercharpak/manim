@@ -26,7 +26,7 @@ def color_to_rgba(color, alpha=1):
 def rgb_to_color(rgb):
     try:
         return Color(rgb=rgb)
-    except:
+    except ValueError:
         return Color(WHITE)
 
 
@@ -35,13 +35,13 @@ def rgba_to_color(rgba):
 
 
 def rgb_to_hex(rgb):
-    return "#" + "".join('%02x' % int(255 * x) for x in rgb)
+    return "#" + "".join(hex(int(255 * x))[2:] for x in rgb)
 
 
 def hex_to_rgb(hex_code):
     hex_part = hex_code[1:]
     if len(hex_part) == 3:
-        "".join([2 * c for c in hex_part])
+        hex_part = "".join([2 * c for c in hex_part])
     return np.array([
         int(hex_part[i:i + 2], 16) / 255
         for i in range(0, 6, 2)
@@ -58,7 +58,7 @@ def color_to_int_rgb(color):
 
 def color_to_int_rgba(color, opacity=1.0):
     alpha = int(255 * opacity)
-    return np.append(color_to_int_rgb(color), alpha)
+    return np.array([*color_to_int_rgb(color), alpha])
 
 
 def color_gradient(reference_colors, length_of_output):
@@ -84,8 +84,7 @@ def interpolate_color(color1, color2, alpha):
 
 def average_color(*colors):
     rgbs = np.array(list(map(color_to_rgb, colors)))
-    mean_rgb = np.apply_along_axis(np.mean, 0, rgbs)
-    return rgb_to_color(mean_rgb)
+    return rgb_to_color(rgbs.mean(0))
 
 
 def random_bright_color():

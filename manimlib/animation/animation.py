@@ -1,10 +1,9 @@
 from copy import deepcopy
 
-import numpy as np
-
 from manimlib.mobject.mobject import Mobject
 from manimlib.utils.config_ops import digest_config
 from manimlib.utils.rate_functions import smooth
+from manimlib.utils.simple_functions import clip
 
 
 DEFAULT_ANIMATION_RUN_TIME = 1.0
@@ -42,6 +41,7 @@ class Animation(object):
         # played.  As much initialization as possible,
         # especially any mobject copying, should live in
         # this method
+        self.mobject.prepare_for_animation()
         self.starting_mobject = self.create_starting_mobject()
         if self.suspend_mobject_updating:
             # All calls to self.mobject's internal updaters
@@ -51,10 +51,12 @@ class Animation(object):
             # the internal updaters of self.starting_mobject,
             # or any others among self.get_all_mobjects()
             self.mobject.suspend_updating()
+        self.families = list(self.get_all_families_zipped())
         self.interpolate(0)
 
     def finish(self):
         self.interpolate(1)
+        self.mobject.cleanup_from_animation()
         if self.suspend_mobject_updating:
             self.mobject.resume_updating()
 
@@ -107,7 +109,7 @@ class Animation(object):
 
     # Methods for interpolation, the mean of an Animation
     def interpolate(self, alpha):
-        alpha = np.clip(alpha, 0, 1)
+        alpha = clip(alpha, 0, 1)
         self.interpolate_mobject(self.rate_func(alpha))
 
     def update(self, alpha):
@@ -118,9 +120,8 @@ class Animation(object):
         self.interpolate(alpha)
 
     def interpolate_mobject(self, alpha):
-        families = list(self.get_all_families_zipped())
-        for i, mobs in enumerate(families):
-            sub_alpha = self.get_sub_alpha(alpha, i, len(families))
+        for i, mobs in enumerate(self.families):
+            sub_alpha = self.get_sub_alpha(alpha, i, len(self.families))
             self.interpolate_submobject(*mobs, sub_alpha)
 
     def interpolate_submobject(self, submobject, starting_sumobject, alpha):
@@ -135,7 +136,7 @@ class Animation(object):
         full_length = (num_submobjects - 1) * lag_ratio + 1
         value = alpha * full_length
         lower = index * lag_ratio
-        return np.clip((value - lower), 0, 1)
+        return clip((value - lower), 0, 1)
 
     # Getters and setters
     def set_run_time(self, run_time):

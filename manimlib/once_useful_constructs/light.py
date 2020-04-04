@@ -67,9 +67,9 @@ class SwitchOff(LaggedStartMap):
         if (not isinstance(light, AmbientLight) and not isinstance(light, Spotlight)):
             raise Exception(
                 "Only AmbientLights and Spotlights can be switched off")
-        light.submobjects = light.submobjects[::-1]
+        light.set_submobjects(light.submobjects[::-1])
         LaggedStartMap.__init__(self, FadeOut, light, **kwargs)
-        light.submobjects = light.submobjects[::-1]
+        light.set_submobjects(light.submobjects[::-1])
 
 
 class Lighthouse(SVGMobject):
@@ -103,7 +103,7 @@ class AmbientLight(VMobject):
         "radius": 5.0
     }
 
-    def generate_points(self):
+    def init_points(self):
         # in theory, this method is only called once, right?
         # so removing submobs shd not be necessary
         #
@@ -181,8 +181,8 @@ class Spotlight(VMobject):
     def get_source_point(self):
         return self.source_point.get_location()
 
-    def generate_points(self):
-        self.submobjects = []
+    def init_points(self):
+        self.set_submobjects([])
 
         self.add(self.source_point)
 
@@ -346,7 +346,7 @@ class LightSource(VMobject):
         "camera_mob": None
     }
 
-    def generate_points(self):
+    def init_points(self):
 
         self.add(self.source_point)
 
@@ -493,7 +493,7 @@ class LightSource(VMobject):
         )
         new_ambient_light.apply_matrix(self.rotation_matrix())
         new_ambient_light.move_source_to(self.get_source_point())
-        self.ambient_light.submobjects = new_ambient_light.submobjects
+        self.ambient_light.set_submobjects(new_ambient_light.submobjects)
 
     def get_source_point(self):
         return self.source_point.get_location()

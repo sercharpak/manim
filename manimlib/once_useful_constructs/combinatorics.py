@@ -100,7 +100,7 @@ class GeneralizedPascalsTriangle(VMobject):
         "submob_class": combinationMobject,
     }
 
-    def generate_points(self):
+    def init_points(self):
         self.cell_height = float(self.height) / self.nrows
         self.cell_width = float(self.width) / self.nrows
         self.bottom_left = (self.cell_width * self.nrows / 2.0) * LEFT + \
@@ -153,7 +153,7 @@ class GeneralizedPascalsTriangle(VMobject):
     def fill_with_n_choose_k(self):
         if not hasattr(self, "coords_to_n_choose_k"):
             self.generate_n_choose_k_mobs()
-        self.submobjects = []
+        self.set_submobjects([])
         self.add(*[
             self.coords_to_n_choose_k[n][k]
             for n, k in self.coords

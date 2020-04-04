@@ -1,5 +1,5 @@
 import itertools as it
-import string
+from colour import Color
 
 from manimlib.animation.animation import Animation
 from manimlib.animation.rotation import Rotating
@@ -25,6 +25,7 @@ from manimlib.utils.rate_functions import linear
 from manimlib.utils.space_ops import angle_of_vector
 from manimlib.utils.space_ops import complex_to_R3
 from manimlib.utils.space_ops import rotate_vector
+from manimlib.utils.space_ops import center_of_mass
 
 
 class Lightbulb(SVGMobject):
@@ -91,7 +92,7 @@ class Speedometer(VMobject):
         "needle_color": YELLOW,
     }
 
-    def generate_points(self):
+    def init_points(self):
         start_angle = np.pi / 2 + self.arc_angle / 2
         end_angle = np.pi / 2 - self.arc_angle / 2
         self.add(Arc(
@@ -391,13 +392,13 @@ class ClockPassesTime(Animation):
         hour_radians = -self.hours_passed * 2 * np.pi / 12
         self.hour_rotation = Rotating(
             clock.hour_hand,
-            radians=hour_radians,
+            angle=hour_radians,
             **rot_kwargs
         )
         self.hour_rotation.begin()
         self.minute_rotation = Rotating(
             clock.minute_hand,
-            radians=12 * hour_radians,
+            angle=12 * hour_radians,
             **rot_kwargs
         )
         self.minute_rotation.begin()
@@ -429,7 +430,7 @@ class Bubble(SVGMobject):
             raise Exception("Must invoke Bubble subclass")
         try:
             SVGMobject.__init__(self, **kwargs)
-        except IOError as err:
+        except IOError:
             self.file_name = os.path.join(FILE_DIR, self.file_name)
             SVGMobject.__init__(self, **kwargs)
         self.center()
@@ -439,6 +440,7 @@ class Bubble(SVGMobject):
             self.flip()
         self.direction_was_specified = ("direction" in kwargs)
         self.content = Mobject()
+        self.refresh_triangulation()
 
     def get_tip(self):
         # TODO, find a better way
@@ -457,6 +459,7 @@ class Bubble(SVGMobject):
 
     def flip(self, axis=UP):
         Mobject.flip(self, axis=axis)
+        self.refresh_triangulation()
         if abs(axis[1]) > 0:
             self.direction = -np.array(self.direction)
         return self
@@ -467,7 +470,7 @@ class Bubble(SVGMobject):
         can_flip = not self.direction_was_specified
         if want_to_flip and can_flip:
             self.flip()
-        boundary_point = mobject.get_critical_point(UP - self.direction)
+        boundary_point = mobject.get_bounding_box_point(UP - self.direction)
         vector_from_center = 1.0 * (boundary_point - mob_center)
         self.move_tip_to(mob_center + vector_from_center)
         return self
@@ -857,16 +860,16 @@ class PlayingCard(VGroup):
         "card_height_to_symbol_height": 7,
         "card_width_to_corner_num_width": 10,
         "card_height_to_corner_num_height": 10,
-        "color": LIGHT_GREY,
+        "color": GREY_A,
         "turned_over": False,
         "possible_suits": ["hearts", "diamonds", "spades", "clubs"],
         "possible_values": list(map(str, list(range(2, 11)))) + ["J", "Q", "K", "A"],
     }
 
     def __init__(self, key=None, **kwargs):
-        VGroup.__init__(self, key=key, **kwargs)
+        VGroup.__init__(self, **kwargs)
 
-    def generate_points(self):
+        self.key = key
         self.add(Rectangle(
             height=self.height,
             width=self.height / self.height_to_width,
@@ -896,7 +899,7 @@ class PlayingCard(VGroup):
                 value = self.key[:-1]
             else:
                 value = random.choice(self.possible_values)
-        value = string.upper(str(value))
+        value = str(value).upper()
         if value == "1":
             value = "A"
         if value not in self.possible_values:
@@ -910,7 +913,7 @@ class PlayingCard(VGroup):
         }
         try:
             self.numerical_value = int(value)
-        except:
+        except Exception:
             self.numerical_value = face_card_to_value[value]
         return value
 
@@ -919,9 +922,9 @@ class PlayingCard(VGroup):
         if suit is None:
             if self.key is not None:
                 suit = dict([
-                    (string.upper(s[0]), s)
+                    (s[0].upper(), s)
                     for s in self.possible_suits
-                ])[string.upper(self.key[-1])]
+                ])[self.key[-1].upper()]
             else:
                 suit = random.choice(self.possible_suits)
         if suit not in self.possible_suits:
@@ -994,7 +997,7 @@ class PlayingCard(VGroup):
         return design
 
     def get_face_card_design(self, value, symbol):
-        from for_3b1b_videos.pi_creature import PiCreature
+        from manimlib.for_3b1b_videos.pi_creature import PiCreature
         sub_rect = Rectangle(
             stroke_color=BLACK,
             fill_opacity=0,
@@ -1005,6 +1008,8 @@ class PlayingCard(VGroup):
 
         # pi_color = average_color(symbol.get_color(), GREY)
         pi_color = symbol.get_color()
+        if Color(pi_color) == Color(BLACK):
+            pi_color = GREY_D
         pi_mode = {
             "J": "plain",
             "Q": "thinking",

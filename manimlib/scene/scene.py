@@ -2,24 +2,29 @@ import inspect
 import random
 import warnings
 import platform
+import itertools as it
 
 from tqdm import tqdm as ProgressDisplay
 import numpy as np
+import time
+from IPython.terminal.embed import InteractiveShellEmbed
 
 from manimlib.animation.animation import Animation
-from manimlib.animation.creation import Write
-from manimlib.animation.transform import MoveToTarget, ApplyMethod
+from manimlib.animation.transform import MoveToTarget
+from manimlib.mobject.mobject import Point
 from manimlib.camera.camera import Camera
 from manimlib.constants import *
 from manimlib.container.container import Container
 from manimlib.mobject.mobject import Mobject
-from manimlib.mobject.svg.tex_mobject import TextMobject
 from manimlib.scene.scene_file_writer import SceneFileWriter
-from manimlib.utils.iterables import list_update
+from manimlib.utils.family_ops import extract_mobject_family_members
+from manimlib.utils.family_ops import restructure_list_to_exclude_certain_family_members
+from manimlib.window import Window
 
 
 class Scene(Container):
     CONFIG = {
+        "window_config": {},
         "camera_class": Camera,
         "camera_config": {},
         "file_writer_config": {},
@@ -29,33 +34,47 @@ class Scene(Container):
         "start_at_animation_number": None,
         "end_at_animation_number": None,
         "leave_progress_bars": False,
+        "preview": True,
+        "linger_after_completion": True,
     }
 
     def __init__(self, **kwargs):
         Container.__init__(self, **kwargs)
-        self.camera = self.camera_class(**self.camera_config)
-        self.file_writer = SceneFileWriter(
-            self, **self.file_writer_config,
-        )
+        if self.preview:
+            self.window = Window(self, **self.window_config)
+            self.camera_config["ctx"] = self.window.ctx
+            self.virtual_animation_start_time = 0
+            self.real_animation_start_time = time.time()
+        else:
+            self.window = None
 
+        self.camera = self.camera_class(**self.camera_config)
+        self.file_writer = SceneFileWriter(self, **self.file_writer_config)
         self.mobjects = []
-        # TODO, remove need for foreground mobjects
-        self.foreground_mobjects = []
         self.num_plays = 0
         self.time = 0
+        self.skip_time = 0
         self.original_skipping_status = self.skip_animations
+        self.time_of_last_frame = time.time()
+
+        # Items associated with interaction
+        self.mouse_point = Point()
+        self.mouse_drag_point = Point()
+        self.zoom_on_scroll = False
+        self.quit_interaction = False
+
+        # Much nice to work with deterministic scenes
         if self.random_seed is not None:
             random.seed(self.random_seed)
             np.random.seed(self.random_seed)
 
+    def run(self):
         self.setup()
         try:
             self.construct()
         except EndSceneEarlyException:
             pass
         self.tear_down()
-        self.file_writer.finish()
-        self.print_end_message()
 
     def setup(self):
         """
@@ -65,84 +84,74 @@ class Scene(Container):
         """
         pass
 
-    def tear_down(self):
+    def construct(self):
+        # Where all the animation happens
+        # To be implemented in subclasses
         pass
 
-    def construct(self):
-        pass  # To be implemented in subclasses
+    def tear_down(self):
+        self.stop_skipping()
+        self.file_writer.finish()
+        if self.window and self.linger_after_completion:
+            self.interact()
+
+    def interact(self):
+        # If there is a window, enter a loop
+        # which updates the frame while under
+        # the hood calling the pyglet event loop
+        self.quit_interaction = False
+        while not self.window.is_closing and not self.quit_interaction:
+            self.update_frame()
+        if self.window.is_closing:
+            self.window.destroy()
+
+    def embed(self):
+        if not self.preview:
+            # If the scene is just being
+            # written, ignore embed calls
+            return
+        self.stop_skipping()
+        self.linger_after_completion = False
+        self.update_frame()
+
+        shell = InteractiveShellEmbed()
+        # Have the frame update after each command
+        shell.events.register('post_run_cell', lambda *a, **kw: self.update_frame())
+        # Stack depth of 2 means the shell will use
+        # the namespace of the caller, not this method
+        shell(stack_depth=2)
 
     def __str__(self):
         return self.__class__.__name__
 
-    def print_end_message(self):
-        print("Played {} animations".format(self.num_plays))
-
-    def set_variables_as_attrs(self, *objects, **newly_named_objects):
-        """
-        This method is slightly hacky, making it a little easier
-        for certain methods (typically subroutines of construct)
-        to share local variables.
-        """
-        caller_locals = inspect.currentframe().f_back.f_locals
-        for key, value in list(caller_locals.items()):
-            for o in objects:
-                if value is o:
-                    setattr(self, key, value)
-        for key, value in list(newly_named_objects.items()):
-            setattr(self, key, value)
-        return self
-
-    def get_attrs(self, *keys):
-        return [getattr(self, key) for key in keys]
-
     # Only these methods should touch the camera
-    def set_camera(self, camera):
-        self.camera = camera
-
-    def get_frame(self):
-        return np.array(self.camera.get_pixel_array())
-
     def get_image(self):
         return self.camera.get_image()
 
-    def set_camera_pixel_array(self, pixel_array):
-        self.camera.set_pixel_array(pixel_array)
-
-    def set_camera_background(self, background):
-        self.camera.set_background(background)
-
-    def reset_camera(self):
-        self.camera.reset()
-
-    def capture_mobjects_in_camera(self, mobjects, **kwargs):
-        self.camera.capture_mobjects(mobjects, **kwargs)
-
-    def update_frame(
-            self,
-            mobjects=None,
-            background=None,
-            include_submobjects=True,
-            ignore_skipping=True,
-            **kwargs):
+    def update_frame(self, dt=0, ignore_skipping=False):
+        self.increment_time(dt)
+        self.update_mobjects(dt)
         if self.skip_animations and not ignore_skipping:
             return
-        if mobjects is None:
-            mobjects = list_update(
-                self.mobjects,
-                self.foreground_mobjects,
-            )
-        if background is not None:
-            self.set_camera_pixel_array(background)
-        else:
-            self.reset_camera()
 
-        kwargs["include_submobjects"] = include_submobjects
-        self.capture_mobjects_in_camera(mobjects, **kwargs)
+        if self.window:
+            self.window.clear()
+        self.camera.clear()
+        self.camera.capture(*self.mobjects)
 
-    def freeze_background(self):
-        self.update_frame()
-        self.set_camera(Camera(self.get_frame()))
-        self.clear()
+        if self.window:
+            self.window.swap_buffers()
+            # win_time, win_dt = self.window.timer.next_frame()
+            # while (self.time - self.skip_time - win_time) > 0:
+            vt = self.time - self.virtual_animation_start_time
+            rt = time.time() - self.real_animation_start_time
+            if rt < vt:
+                self.update_frame(0)
+
+    def emit_frame(self):
+        if not self.skip_animations:
+            self.file_writer.write_frame(self.camera)
+
     ###
 
     def update_mobjects(self, dt):
@@ -151,8 +160,8 @@ class Scene(Container):
 
     def should_update_mobjects(self):
         return self.always_update_mobjects or any([
-            mob.has_time_based_updater()
-            for mob in self.get_mobject_family_members()
+            len(mob.get_family_updaters()) > 0
+            for mob in self.mobjects
         ])
 
     ###
@@ -160,11 +169,10 @@ class Scene(Container):
     def get_time(self):
         return self.time
 
-    def increment_time(self, d_time):
-        self.time += d_time
+    def increment_time(self, dt):
+        self.time += dt
 
     ###
-
     def get_top_level_mobjects(self):
         # Return only those which are not in the family
         # of another mobject from the scene
@@ -180,16 +188,15 @@ class Scene(Container):
         return list(filter(is_top_level, mobjects))
 
     def get_mobject_family_members(self):
-        return self.camera.extract_mobject_family_members(self.mobjects)
+        return extract_mobject_family_members(self.mobjects)
 
-    def add(self, *mobjects):
+    def add(self, *new_mobjects):
         """
         Mobjects will be displayed, from background to
         foreground in the order with which they are added.
         """
-        mobjects = [*mobjects, *self.foreground_mobjects]
-        self.restructure_mobjects(to_remove=mobjects)
-        self.mobjects += mobjects
+        self.remove(*new_mobjects)
+        self.mobjects += new_mobjects
         return self
 
     def add_mobjects_among(self, values):
@@ -204,60 +211,11 @@ class Scene(Container):
         ))
         return self
 
-    def remove(self, *mobjects):
-        for list_name in "mobjects", "foreground_mobjects":
-            self.restructure_mobjects(mobjects, list_name, False)
-        return self
-
-    def restructure_mobjects(self, to_remove,
-                             mobject_list_name="mobjects",
-                             extract_families=True):
-        """
-        In cases where the scene contains a group, e.g. Group(m1, m2, m3), but one
-        of its submobjects is removed, e.g. scene.remove(m1), the list of mobjects
-        will be editing to contain other submobjects, but not m1, e.g. it will now
-        insert m2 and m3 to where the group once was.
-        """
-        if extract_families:
-            to_remove = self.camera.extract_mobject_family_members(to_remove)
-        _list = getattr(self, mobject_list_name)
-        new_list = self.get_restructured_mobject_list(_list, to_remove)
-        setattr(self, mobject_list_name, new_list)
-        return self
-
-    def get_restructured_mobject_list(self, mobjects, to_remove):
-        new_mobjects = []
-
-        def add_safe_mobjects_from_list(list_to_examine, set_to_remove):
-            for mob in list_to_examine:
-                if mob in set_to_remove:
-                    continue
-                intersect = set_to_remove.intersection(mob.get_family())
-                if intersect:
-                    add_safe_mobjects_from_list(mob.submobjects, intersect)
-                else:
-                    new_mobjects.append(mob)
-        add_safe_mobjects_from_list(mobjects, set(to_remove))
-        return new_mobjects
-
-    # TODO, remove this, and calls to this
-    def add_foreground_mobjects(self, *mobjects):
-        self.foreground_mobjects = list_update(
-            self.foreground_mobjects,
-            mobjects
+    def remove(self, *mobjects_to_remove):
+        self.mobjects = restructure_list_to_exclude_certain_family_members(
+            self.mobjects, mobjects_to_remove
         )
-        self.add(*mobjects)
         return self
-
-    def add_foreground_mobject(self, mobject):
-        return self.add_foreground_mobjects(mobject)
-
-    def remove_foreground_mobjects(self, *to_remove):
-        self.restructure_mobjects(to_remove, "foreground_mobjects")
-        return self
-
-    def remove_foreground_mobject(self, mobject):
-        return self.remove_foreground_mobjects(mobject)
 
     def bring_to_front(self, *mobjects):
         self.add(*mobjects)
@@ -270,7 +228,6 @@ class Scene(Container):
 
     def clear(self):
         self.mobjects = []
-        self.foreground_mobjects = []
         return self
 
     def get_mobjects(self):
@@ -279,23 +236,6 @@ class Scene(Container):
     def get_mobject_copies(self):
         return [m.copy() for m in self.mobjects]
 
-    def get_moving_mobjects(self, *animations):
-        # Go through mobjects from start to end, and
-        # as soon as there's one that needs updating of
-        # some kind per frame, return the list from that
-        # point forward.
-        animation_mobjects = [anim.mobject for anim in animations]
-        mobjects = self.get_mobject_family_members()
-        for i, mob in enumerate(mobjects):
-            update_possibilities = [
-                mob in animation_mobjects,
-                len(mob.get_family_updaters()) > 0,
-                mob in self.foreground_mobjects
-            ]
-            if any(update_possibilities):
-                return mobjects[i:]
-        return []
-
     def get_time_progression(self, run_time, n_iterations=None, override_skip_animations=False):
         if self.skip_animations and not override_skip_animations:
             times = [run_time]
@@ -303,7 +243,8 @@ class Scene(Container):
             step = 1 / self.camera.frame_rate
             times = np.arange(0, run_time, step)
         time_progression = ProgressDisplay(
-            times, total=n_iterations,
+            times,
+            total=n_iterations,
             leave=self.leave_progress_bars,
             ascii=False if platform.system() != 'Windows' else True
         )
@@ -316,13 +257,12 @@ class Scene(Container):
         run_time = self.get_run_time(animations)
         time_progression = self.get_time_progression(run_time)
         time_progression.set_description("".join([
-            "Animation {}: ".format(self.num_plays),
-            str(animations[0]),
-            (", etc." if len(animations) > 1 else ""),
+            f"Animation {self.num_plays}: {animations[0]}",
+            ", etc." if len(animations) > 1 else "",
         ]))
         return time_progression
 
-    def compile_play_args_to_animation_list(self, *args, **kwargs):
+    def anims_from_play_args(self, *args, **kwargs):
         """
         Each arg can either be an animation, or a mobject method
         followed by that methods arguments (and potentially follow
@@ -390,42 +330,67 @@ class Scene(Container):
         return animations
 
     def update_skipping_status(self):
-        if self.start_at_animation_number:
+        if self.start_at_animation_number is not None:
             if self.num_plays == self.start_at_animation_number:
-                self.skip_animations = False
-        if self.end_at_animation_number:
+                self.stop_skipping()
+        if self.end_at_animation_number is not None:
             if self.num_plays >= self.end_at_animation_number:
-                self.skip_animations = True
                 raise EndSceneEarlyException()
 
+    def stop_skipping(self):
+        if self.skip_animations:
+            self.skip_animations = False
+            self.skip_time += self.time
+
+    # Methods associated with running animations
     def handle_play_like_call(func):
         def wrapper(self, *args, **kwargs):
             self.update_skipping_status()
-            allow_write = not self.skip_animations
-            self.file_writer.begin_animation(allow_write)
+            should_write = not self.skip_animations
+            if should_write:
+                self.file_writer.begin_animation()
+
+            if self.window:
+                self.real_animation_start_time = time.time()
+                self.virtual_animation_start_time = self.time
+
             func(self, *args, **kwargs)
-            self.file_writer.end_animation(allow_write)
+
+            if should_write:
+                self.file_writer.end_animation()
+
             self.num_plays += 1
         return wrapper
 
+    def lock_static_mobject_data(self, *animations):
+        movers = list(it.chain(*[
+            anim.mobject.get_family()
+            for anim in animations
+        ]))
+        for mobject in self.mobjects:
+            if mobject in movers:
+                continue
+            if mobject.get_family_updaters():
+                continue
+            mobject.lock_shader_data()
+
+    def unlock_mobject_data(self):
+        for mobject in self.mobjects:
+            mobject.unlock_shader_data()
+
     def begin_animations(self, animations):
-        curr_mobjects = self.get_mobject_family_members()
         for animation in animations:
-            # Begin animation
             animation.begin()
             # Anything animated that's not already in the
-            # scene gets added to the scene
+            # scene gets added to the scene.  Note, for
+            # animated mobjects that are in the family of
+            # those on screen, this can result in a restructuring
+            # of the scene.mobjects list, which is usually desired.
             mob = animation.mobject
-            if mob not in curr_mobjects:
+            if mob not in self.mobjects:
                 self.add(mob)
-                curr_mobjects += mob.get_family()
 
     def progress_through_animations(self, animations):
-        # Paint all non-moving objects onto the screen, so they don't
-        # have to be rendered every frame
-        moving_mobjects = self.get_moving_mobjects(*animations)
-        self.update_frame(excluded_mobjects=moving_mobjects)
-        static_image = self.get_frame()
         last_t = 0
         for t in self.get_animation_time_progression(animations):
             dt = t - last_t
@@ -434,9 +399,8 @@ class Scene(Container):
                 animation.update_mobjects(dt)
                 alpha = t / animation.run_time
                 animation.interpolate(alpha)
-            self.update_mobjects(dt)
-            self.update_frame(moving_mobjects, static_image)
-            self.add_frames(self.get_frame())
+            self.update_frame(dt)
+            self.emit_frame()
 
     def finish_animations(self, animations):
         for animation in animations:
@@ -446,7 +410,6 @@ class Scene(Container):
             anim.mobject for anim in animations
         ]
         if self.skip_animations:
-            # TODO, run this call in for each animation?
             self.update_mobjects(self.get_run_time(animations))
         else:
             self.update_mobjects(0)
@@ -456,15 +419,12 @@ class Scene(Container):
         if len(args) == 0:
             warnings.warn("Called Scene.play with no animations")
             return
-        animations = self.compile_play_args_to_animation_list(
-            *args, **kwargs
-        )
+        animations = self.anims_from_play_args(*args, **kwargs)
+        self.lock_static_mobject_data(*animations)
         self.begin_animations(animations)
         self.progress_through_animations(animations)
         self.finish_animations(animations)
-
-    def idle_stream(self):
-        self.file_writer.idle_stream()
+        self.unlock_mobject_data()
 
     def clean_up_animations(self, *animations):
         for animation in animations:
@@ -497,28 +457,26 @@ class Scene(Container):
     def wait(self, duration=DEFAULT_WAIT_TIME, stop_condition=None):
         self.update_mobjects(dt=0)  # Any problems with this?
         if self.should_update_mobjects():
+            self.lock_static_mobject_data()
             time_progression = self.get_wait_time_progression(duration, stop_condition)
-            # TODO, be smart about setting a static image
-            # the same way Scene.play does
             last_t = 0
             for t in time_progression:
                 dt = t - last_t
                 last_t = t
-                self.update_mobjects(dt)
-                self.update_frame()
-                self.add_frames(self.get_frame())
+                self.update_frame(dt)
+                self.emit_frame()
                 if stop_condition is not None and stop_condition():
                     time_progression.close()
                     break
+            self.unlock_mobject_data()
         elif self.skip_animations:
             # Do nothing
             return self
         else:
-            self.update_frame()
-            dt = 1 / self.camera.frame_rate
-            n_frames = int(duration / dt)
-            frame = self.get_frame()
-            self.add_frames(*[frame] * n_frames)
+            self.update_frame(duration)
+            n_frames = int(duration * self.camera.frame_rate)
+            for n in range(n_frames):
+                self.emit_frame()
         return self
 
     def wait_until(self, stop_condition, max_time=60):
@@ -534,34 +492,79 @@ class Scene(Container):
             self.skip_animations = self.original_skipping_status
         return self
 
-    def add_frames(self, *frames):
-        dt = 1 / self.camera.frame_rate
-        self.increment_time(len(frames) * dt)
-        if self.skip_animations:
-            return
-        for frame in frames:
-            self.file_writer.write_frame(frame)
-
     def add_sound(self, sound_file, time_offset=0, gain=None, **kwargs):
         if self.skip_animations:
             return
         time = self.get_time() + time_offset
         self.file_writer.add_sound(sound_file, time, gain, **kwargs)
 
-    def show_frame(self):
+    def show(self):
         self.update_frame(ignore_skipping=True)
         self.get_image().show()
 
-    # TODO, this doesn't belong in Scene, but should be
-    # part of some more specialized subclass optimized
-    # for livestreaming
-    def tex(self, latex):
-        eq = TextMobject(latex)
-        anims = []
-        anims.append(Write(eq))
-        for mobject in self.mobjects:
-            anims.append(ApplyMethod(mobject.shift, 2 * UP))
-        self.play(*anims)
+    # Helpers for interactive development
+    def save_state(self):
+        self.saved_state = {
+            "mobjects": self.mobjects,
+            "mobject_states": [
+                mob.copy()
+                for mob in self.mobjects
+            ],
+        }
+
+    def restore(self):
+        if not hasattr(self, "saved_state"):
+            raise Exception("Trying to restore scene without having saved")
+        mobjects = self.saved_state["mobjects"]
+        states = self.saved_state["mobject_states"]
+        for mob, state in zip(mobjects, states):
+            mob.become(state)
+        self.mobjects = mobjects
+
+    # Event handling
+    def on_mouse_motion(self, point, d_point):
+        self.mouse_point.move_to(point)
+
+    def on_mouse_drag(self, point, d_point, buttons, modifiers):
+        self.mouse_drag_point.move_to(point)
+
+    def on_mouse_press(self, point, button, mods):
+        pass
+
+    def on_mouse_release(self, point, button, mods):
+        pass
+
+    def on_mouse_scroll(self, point, offset):
+        frame = self.camera.frame
+        if self.zoom_on_scroll:
+            factor = 1 + np.arctan(10 * offset[1])
+            frame.scale(factor, about_point=point)
+        else:
+            frame.shift(-30 * offset)
+
+    def on_key_release(self, symbol, modifiers):
+        if chr(symbol) == "z":
+            self.zoom_on_scroll = False
+
+    def on_key_press(self, symbol, modifiers):
+        if chr(symbol) == "r":
+            self.camera.frame.restore()
+        elif chr(symbol) == "z":
+            self.zoom_on_scroll = True
+        elif chr(symbol) == "q":
+            self.quit_interaction = True
+
+    def on_resize(self, width: int, height: int):
+        self.camera.reset_pixel_shape(width, height)
+
+    def on_show(self):
+        pass
+
+    def on_hide(self):
+        pass
+
+    def on_close(self):
+        pass
 
 
 class EndSceneEarlyException(Exception):
