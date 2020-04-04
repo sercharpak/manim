@@ -72,6 +72,7 @@ python3 ./manim.py example_scenes.py SquareToCircle -pl
 
 ### Directly (Windows)
 1. [Install FFmpeg](https://www.wikihow.com/Install-FFmpeg-on-Windows).
+2. Type conda create -n 3b1b python=3.7
 2. [Install Cairo](https://www.lfd.uci.edu/~gohlke/pythonlibs/#pycairo). For most users, ``pycairo‑1.18.0‑cp37‑cp37m‑win32.whl`` will do fine.
     ```sh
     pip3 install C:\path\to\wheel\pycairo‑1.18.0‑cp37‑cp37m‑win32.whl
@@ -82,11 +83,12 @@ python3 ./manim.py example_scenes.py SquareToCircle -pl
 
 5. Install the remaining Python packages. Make sure that ``pycairo==1.17.1`` is changed to ``pycairo==1.18.0`` in requirements.txt.
     ```sh
-    git clone https://github.com/3b1b/manim.git
-    cd manim
+    git clone https://github.com/3b1b/manim_deconfinement.git
+    cd manim_deconfinement
     pip3 install -r requirements.txt
     python3 manim.py example_scenes.py SquareToCircle -pl
     ```
+6. You might need to add the packages described above (ipython, moderngl, ...)
 
 
 ## Anaconda Install
