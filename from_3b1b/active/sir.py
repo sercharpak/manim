@@ -552,57 +552,16 @@ class SIRDeconfSim(SIRSimulation):
         self.add(boxes)
         self.boxes = boxes
     
-#    def add_people(self):
-#        people = VGroup()
-#        count=-1
-#        for box in self.boxes:
-#            count=count+1
-#            #print(count)
-#            dl_bound = box.get_corner(DL)
-#            ur_bound = box.get_corner(UR)
-#            box.people = VGroup()
-#            for x in range(self.city_population[count]):
-#                person = self.person_type(
-#                    dl_bound=dl_bound,
-#                    ur_bound=ur_bound,
-#                    **self.person_config
-#                )
-#                person.move_to([
-#                    interpolate(lower, upper, random.random())
-#                    for lower, upper in zip(dl_bound, ur_bound)
-#                ])
-#                person.box = box
-#                box.people.add(person)
-#                people.add(person)
-#                
-#                
-#        # CUSTOM CODE STARTS HERE
-#        # we count the total number of infected and recovered people over all boxes
-#        num_infected = int(self.initial_infected_ratio * np.sum(self.city_population))
-#        num_recovered = int(self.initial_recovered_ratio * np.sum(self.city_population))
-#        special_status = random.sample(list(people), num_infected + num_recovered)
-#        
-#        infected = special_status[:num_infected]
-#        recovered = special_status[num_infected:]
-#        
-#        for person in infected:
-#            person.set_status("I")
-#        for person in recovered:
-#            person.set_status("R")
-#        self.add(people)
-#        self.people = people
         
     def add_people(self):
         people = VGroup()
         count=-1
-        PersonType = [DotPerson, SmallDotPerson,SquarePerson,TrianglePerson,EllipsePerson,RectanglePerson]
         for box in self.boxes:
             count=count+1
             #print(count)
             dl_bound = box.get_corner(DL)
             ur_bound = box.get_corner(UR)
             box.people = VGroup()
-            self.person_type = PersonType[count]
             for x in range(self.city_population[count]):
                 person = self.person_type(
                     dl_bound=dl_bound,
@@ -724,6 +683,103 @@ class SIRDeconfSim(SIRSimulation):
                     diffs = np.linalg.norm(repelled_centers - center, axis=1)
                     person.repulsion_points = repelled_centers[np.argsort(diffs)[1:person.n_repulsion_points + 1]]
 
+class SIRDeconfSim_RatioPerBox(SIRDeconfSim):
+    CONFIG={
+        "initial_infected_ratio": 0.1,
+        "initial_recovered_ratio": 0.1
+        }
+    
+    def add_people(self):
+        people = VGroup()
+        count=-1
+        for box in self.boxes:
+            count=count+1
+            #print(count)
+            dl_bound = box.get_corner(DL)
+            ur_bound = box.get_corner(UR)
+            box.people = VGroup()
+            for x in range(self.city_population[count]):
+                person = self.person_type(
+                    dl_bound=dl_bound,
+                    ur_bound=ur_bound,
+                    **self.person_config
+                )
+                person.move_to([
+                    interpolate(lower, upper, random.random())
+                    for lower, upper in zip(dl_bound, ur_bound)
+                ])
+                person.box = box
+                box.people.add(person)
+                people.add(person)
+                
+                
+            # CUSTOM CODE STARTS HERE
+            # we count the total number of infected and recovered people over all boxes
+            num_infected = int(self.initial_infected_ratio[count] * self.city_population[count])
+            num_recovered = int(self.initial_recovered_ratio[count] * self.city_population[count])
+            special_status = random.sample(list(box.people), num_infected + num_recovered)
+            
+            infected = special_status[:num_infected]
+            recovered = special_status[num_infected:]
+            
+            start_dates = np.arange(-self.infection_time, 1)
+            
+            for person in infected:
+                person.set_status("I")
+                person.infection_start_time = np.random.choice(start_dates)
+            for person in recovered:
+                person.set_status("R")
+            self.add(people)
+            self.people = people
+        
+class SIRDeconfSim_multiple_body(SIRDeconfSim):
+
+
+    def add_people(self):
+        people = VGroup()
+        count=-1
+        PersonType = [DotPerson, SmallDotPerson,SquarePerson,TrianglePerson,EllipsePerson,RectanglePerson]
+        for box in self.boxes:
+            count=count+1
+            dl_bound = box.get_corner(DL)
+            ur_bound = box.get_corner(UR)
+            box.people = VGroup()
+            self.person_type = PersonType[count]
+            for x in range(self.city_population[count]):
+                person = self.person_type(
+                    dl_bound=dl_bound,
+                    ur_bound=ur_bound,
+                    **self.person_config
+                )
+                person.move_to([
+                    interpolate(lower, upper, random.random())
+                    for lower, upper in zip(dl_bound, ur_bound)
+                ])
+                person.box = box
+                box.people.add(person)
+                people.add(person)
+                
+                
+        # CUSTOM CODE STARTS HERE
+        # we count the total number of infected and recovered people over all boxes
+        num_infected = int(self.initial_infected_ratio * np.sum(self.city_population))
+        num_recovered = int(self.initial_recovered_ratio * np.sum(self.city_population))
+        special_status = random.sample(list(people), num_infected + num_recovered)
+        
+        infected = special_status[:num_infected]
+        recovered = special_status[num_infected:]
+        
+        start_dates = np.arange(-self.infection_time, 1)
+        
+
+        for person in infected:
+            person.set_status("I")
+            person.infection_start_time = np.random.choice(start_dates)
+        for person in recovered:
+            person.set_status("R")
+        self.add(people)
+        self.people = people
+  
 class SIRGraph(VGroup):
     CONFIG = {
         "color_map": COLOR_MAP,
@@ -1695,6 +1751,24 @@ class Deconf_box(SimpleTravelSocialDistancePlusZeroTravel):
             #super().run_until_zero_infections()
         self.wait_until(None)
 
+
+
+class Deconf_box_multiple_body(Deconf_box):
+    
+    def add_simulation(self):
+        print('our add_simulation')
+        self.simulation = SIRDeconfSim_multiple_body(**self.simulation_config)
+        self.add(self.simulation)
+        
+class Deconf_box_RatioPerBox(Deconf_box):
+    
+    def add_simulation(self):
+        print('our add_simulation')
+        self.simulation = SIRDeconfSim_RatioPerBox(**self.simulation_config)
+        self.add(self.simulation)
+
+
+        
 class SimpleTravelSocialDistancePlusZeroTravel99p(SimpleTravelSocialDistancePlusZeroTravel):
     CONFIG = {
         "sd_probability": 0.99,
@@ -1968,7 +2042,26 @@ class CentralMarket(DelayedSocialDistancing):
     def add_sliders(self):
         pass
 
+class Deconf_box_RatioPerBox_Market(Deconf_box_RatioPerBox, CentralMarket):
+    
+    def setup(self):
+        super().setup()
+        for person in self.simulation.people:
+            person.last_shopping_trip = -3
+            person.is_shopping = False
 
+        square = Square()
+        square.set_height(0.2)
+        square.set_color(WHITE)
+        square.move_to(self.simulation.boxes[0].get_center())
+        self.add(square)
+
+        self.simulation.add_updater(
+            lambda m, dt: self.add_travel_anims(m, dt)
+        )
+        Deconf_box.setup(self)
+        
+        
 class CentralMarketLargePopulation(CentralMarket, LargerCity):
     pass
 
