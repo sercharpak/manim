@@ -28,7 +28,7 @@ class DisrespectfulCitizen(TrianglePerson):
         }
 class YoungPerson(DotPerson):
     CONFIG = {
-        "social_distance_factor": 0.7,
+        "social_distance_factor": 1.0,
         "goes_to_school_probability": 0.7,
         #"infection_radius": 0.3,
         }
@@ -195,10 +195,11 @@ class YoungAndOldPeople(RunSimpleDeconfSimulation):
 
 class School(YoungAndOldPeople):
     CONFIG = {
-        "sd_probability": 0.7,
+        "sd_probability": 0.9,
         "delay_time": 5,
         "school_frequency": 0.05,
         "school_time": 1,
+        "is_open": 0,
     }
 
     # SDHC - Right Bottom Quarter
@@ -237,26 +238,27 @@ class School(YoungAndOldPeople):
 
     def add_travel_anims(self, simulation, dt):
         school_time = self.school_time
-        for person in simulation.people:
-            if person.goes_to_school_probability>0:
-                time_since_trip = person.time - person.last_school_trip
-                if time_since_trip > school_time:
-                    # SDHC probably a better way to deal with the fact that they all go
-                    if random.random() < person.goes_to_school_probability*self.school_frequency:
-                        person.last_school_trip = person.time
-                        # SDHC - Right Bottom Quarter
-                        where_to_move_point = self.findRightBottomQuarterCenter(person.box)
-                        point = VectorizedPoint(person.get_center())
-                        anim1 = ApplyMethod(
-                            point.move_to, where_to_move_point,
-                            path_arc=45 * DEGREES,
-                            run_time=school_time,
-                            rate_func=there_and_back_with_pause,
-                        )
-                        anim2 = MaintainPositionRelativeTo(person, point, run_time=school_time)
+        if(self.is_open):
+            for person in simulation.people:
+                if person.goes_to_school_probability>0:
+                    time_since_trip = person.time - person.last_school_trip
+                    if time_since_trip > school_time:
+                        # SDHC probably a better way to deal with the fact that they all go
+                        if random.random() < person.goes_to_school_probability*self.school_frequency:
+                            person.last_school_trip = person.time
+                            # SDHC - Right Bottom Quarter
+                            where_to_move_point = self.findRightBottomQuarterCenter(person.box)
+                            point = VectorizedPoint(person.get_center())
+                            anim1 = ApplyMethod(
+                                point.move_to, where_to_move_point,
+                                path_arc=45 * DEGREES,
+                                run_time=school_time,
+                                rate_func=there_and_back_with_pause,
+                            )
+                            anim2 = MaintainPositionRelativeTo(person, point, run_time=school_time)
 
-                        person.push_anim(anim1)
-                        person.push_anim(anim2)
+                            person.push_anim(anim1)
+                            person.push_anim(anim2)
 
     def add_sliders(self):
         pass
@@ -270,18 +272,18 @@ class SchoolClosingReOpening(School):
         "simulation_config": {
             "city_population": 200,
             "box_size":7,
-        "initial_infected_ratio": 0.01,
+        "initial_infected_ratio": 0.1,
         "initial_recovered_ratio": 0.05,
         },
 
-        "sd_probability": 0.9,
-        "delay_time": 0.1,
-        "p_infection_per_day": 0.05,
+        "sd_probability": 0.8,
+        "delay_time": 0.5,
+        "p_infection_per_day": 0.1,
         "school_frequency": 0.1,
         "original_frequency":0.00,
         "closing_proportion":0.05,
         "opening_proportion":0.15,
-        "is_open":1,
+        "is_open":0,
     }
     def close(self):
         """Closes the school, it changes the frequency to 0."""
@@ -318,7 +320,7 @@ class SchoolClosingReOpening(School):
                 self.close()
             if (not self.is_open) & (self.get_recovered_proportion() > self.opening_proportion):
                 self.open()
-            self.wait(1)
+            self.wait(5)
             if self.simulation.get_status_counts()[1] == 0:
                 self.wait(1)
                 break
