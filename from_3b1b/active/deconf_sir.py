@@ -553,9 +553,7 @@ class LateRelease(ToggledConfinement):
                 "release_threshold":5
             }
     }
-<<<<<<< HEAD
 
-=======
 
 class NormalReleasePartialDeconfinement(NormalRelease):
     CONFIG = {
@@ -565,7 +563,6 @@ class NormalReleasePartialDeconfinement(NormalRelease):
             }
         }
 
->>>>>>> eb365dfee107e4ff13e5f87b0ae225cdd3bc5418
 class YoungAndOldPeople(RunSimpleDeconfSimulation):
     CONFIG = {
         "simulation_config": {
