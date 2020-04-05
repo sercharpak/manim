@@ -181,39 +181,59 @@ class Scenariob_TestBoxYellow(Deconf_box_RatioPerBox_Market):
     
     CONFIG = {        
         "simulation_config": {
-            "initial_infected_ratio": [0.1, 0.2, 0.1, 0.2, 0.1, 0.2],
-            "initial_recovered_ratio": [0.1, 0.1, 0.2, 0.1, 0.2,0.1],
+            "initial_infected_ratio": [0.1, 0.2, 0.1, 0.1, 0.1, 0.2],
+            "initial_recovered_ratio": [0.1, 0.1, 0.2, 0.35, 0.2,0.1],
             "person_type": DotPerson,
             "n_cities": 6,
-            "city_population": [30,30, 30, 30, 30, 30],
+            "city_population": [30, 50, 30, 30, 40, 30],
             "person_config": {
                 "infection_radius": 1,
                 "social_distance_factor": 2,
                 "gravity_strength": 0.5,
             },
             "travel_rate": 0.01,
-            "infection_time": 10,
+            "infection_time": 15,
             }, 
             "Prop_recovered": 0.4,
         }
-
-class Scenariof_LowELowTravel(Deconf_box_RatioPerBox_Market):
+            
+class Scenario_large_city(Deconf_box_RatioPerBox_Market):
     
     CONFIG = {        
         "simulation_config": {
-            "initial_infected_ratio": [0.1, 0.2, 0.1, 0.2, 0.1, 0.2],
-            "initial_recovered_ratio": [0.1, 0.1, 0.2, 0.1, 0.2,0.1],
+            "initial_infected_ratio": [0.1, 0.2, 0.1, 0.1, 0.1, 0.2],
+            "initial_recovered_ratio": [0.1, 0.1, 0.2, 0.35, 0.2,0.1],
             "person_type": DotPerson,
             "n_cities": 6,
-            "city_population": [30,30, 30, 30, 30, 30],
+            "city_population": [30, 150, 30, 30, 40, 30],
             "person_config": {
                 "infection_radius": 1,
                 "social_distance_factor": 2,
                 "gravity_strength": 0.5,
             },
             "travel_rate": 0.01,
-            "infection_time": 10,
+            "infection_time": 15,
             }, 
-            "Prop_recovered": 0.2,
+            "Prop_recovered": 0.4,
         }
+            
+class Scenario_large_city_LargerPr(Deconf_box_RatioPerBox_Market):
+    
+    CONFIG = {        
+        "simulation_config": {
+            "initial_infected_ratio": [0.1, 0.2, 0.1, 0.1, 0.1, 0.2],
+            "initial_recovered_ratio": [0.1, 0.1, 0.2, 0.35, 0.2,0.1],
+            "person_type": DotPerson,
+            "n_cities": 6,
+            "city_population": [30, 150, 30, 30, 40, 30],
+            "person_config": {
+                "infection_radius": 1,
+                "social_distance_factor": 2,
+                "gravity_strength": 0.5,
+            },
+            "travel_rate": 0.01,
+            "infection_time": 15,
+            }, 
+            "Prop_recovered": 0.5,
+        }            
             

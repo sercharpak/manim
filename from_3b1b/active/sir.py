@@ -1354,10 +1354,10 @@ class DelayedSocialDistancing(RunSimpleSimulation):
                         #print('P', P)
                         #print('social_distance_factor',P.social_distance_factor)
                 print('At time ', self.simulation.get_time())
+                box.set_stroke(YELLOW, 3)
                 if(not AlreadyAVLine) :
                     print('v_line')
                     self.graph.add_v_line()
-                    box.set_stroke(YELLOW, 3)
                     self.play(
                         self.tr_slider.get_change_anim(self.simulation.travel_rate),
                         self.sd_slider.get_change_anim(new_factor),
@@ -1656,6 +1656,7 @@ class Deconf_box(SimpleTravelSocialDistancePlusZeroTravel):
             "Prop_recovered": 0.5,
             "target_sd_factor": 2,
             "target_travel_rate": 0.02,
+            "social_distancing_deconf":0,
     "simulation_config": {
             "initial_infected_ratio": 0.5,
             "initial_recovered_ratio": 0.1,
@@ -1741,7 +1742,7 @@ class Deconf_box(SimpleTravelSocialDistancePlusZeroTravel):
             self.wait_until(lambda: np.any(np.logical_and((np.divide(self.simulation.get_statusses_r_box_count(),self.simulation.city_population)>self.Prop_recovered), np.logical_not(self.simulation.get_status_deconf_box()))), maxTime)
             Box_to_deconfine=np.divide(self.simulation.get_statusses_r_box_count(),self.simulation.city_population)>self.Prop_recovered
             print('Box_to_deconfine',Box_to_deconfine)
-            self.change_social_distance_factor_box(0, 1, Box_to_deconfine)
+            self.change_social_distance_factor_box(self.social_distancing_deconf, 1, Box_to_deconfine)
             #self.change_travel_rate()
 #            self.simulation.travel_rate = 0
 #            self.graph.add_v_line()
