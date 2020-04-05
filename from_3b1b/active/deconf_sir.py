@@ -302,14 +302,22 @@ class SIRDeconfSim(SIRSimulation):
 
         infected = special_status[:num_infected]
         recovered = special_status[num_infected:]
+        
+        start_dates = np.arange(-self.infection_time, 1)
+        
 
         for person in infected:
             person.set_status("I")
+            person.infection_start_time = np.random.choice(start_dates)
         for person in recovered:
             person.set_status("R")
         self.add(people)
         self.people = people
 
+class StartFromDeconf(RunSimpleSimulation):
+    def add_simulation(self):
+        self.simulation = SIRDeconfSim(**self.simulation_config)
+        self.add(self.simulation)
 
 class RunSimpleDeconfSimulation(RunSimpleSimulation):
     def add_simulation(self):
@@ -338,7 +346,8 @@ class ToggledConfinement(RunSimpleSimulation):
             },
             "p_infection_per_day": 0.3,
             "activation_threshold": 50,
-            "release_threshold": 15
+            "release_threshold": 15,
+            "post_confinement_sdf": 0.0
         }
     }
     
@@ -361,7 +370,7 @@ class ToggledConfinement(RunSimpleSimulation):
         self.confinement=True
     def release_confinement(self):
         for person in self.simulation.people:
-            person.social_distance_factor=0
+            person.social_distance_factor=self.simulation.post_confinement_sdf
         self.confinement=False
         
     def run_until_zero_infections(self):           
@@ -402,6 +411,14 @@ class LateRelease(ToggledConfinement):
                 "release_threshold":5
             }
     }
+        
+class NormalReleasePartialDeconfinement(NormalRelease):
+    CONFIG = {
+        "simulation_config":
+            {
+                "post_confinement_sdf": 0.5
+            }
+        }
     
 class YoungAndOldPeople(RunSimpleDeconfSimulation):
     CONFIG = {
