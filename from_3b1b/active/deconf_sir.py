@@ -194,6 +194,10 @@ class SquarePerson(PersonGeneralized):
     def get_body(self):
         return Square()
 
+class SmallSquarePerson(PersonGeneralized):
+    def get_body(self):
+        return SmallSquare()
+
 class TrianglePerson(PersonGeneralized):
     def get_body(self):
         return Triangle()
@@ -208,15 +212,15 @@ class DisrespectfulCitizen(TrianglePerson):
     CONFIG = {
         "social_distance_factor": 0
         }
-class YoungPerson(DotPerson):
+class YoungPerson(SmallDotPerson):
     CONFIG = {
-        "social_distance_factor": 1.0,
+        "social_distance_factor": 0.8,
         "goes_to_school_probability": 0.7,
         #"infection_radius": 0.3,
         }
-class OldPerson(PiPerson):
+class OldPerson(SmallSquarePerson):
     CONFIG = {
-        "social_distance_factor": 1.0,
+        "social_distance_factor": 0.9,
         #"infection_radius": 0.25,
         "goes_to_school_probability": -1.0,
         }
@@ -377,13 +381,21 @@ class SIRDeconfSim(SIRSimulationDead):
         infected = special_status[:num_infected]
         recovered = special_status[num_infected:]
 
+        start_dates = np.arange(-self.infection_time, 1)
+
+
         for person in infected:
             person.set_status("I")
+            person.infection_start_time = np.random.choice(start_dates)
         for person in recovered:
             person.set_status("R")
         self.add(people)
         self.people = people
 
+class StartFromDeconf(RunSimpleSimulation):
+    def add_simulation(self):
+        self.simulation = SIRDeconfSim(**self.simulation_config)
+        self.add(self.simulation)
 
 class RunSimpleDeconfSimulation(RunSimpleSimulation):
     def setup(self):
@@ -477,7 +489,8 @@ class ToggledConfinement(RunSimpleDeconfSimulationHospital):
             },
             "p_infection_per_day": 0.3,
             "activation_threshold": 50,
-            "release_threshold": 15
+            "release_threshold": 15,
+            "post_confinement_sdf": 0.0
         }
     }
 
@@ -500,7 +513,7 @@ class ToggledConfinement(RunSimpleDeconfSimulationHospital):
         self.confinement=True
     def release_confinement(self):
         for person in self.simulation.people:
-            person.social_distance_factor=0
+            person.social_distance_factor=self.simulation.post_confinement_sdf
         self.confinement=False
 
     def run_until_zero_infections(self):
@@ -540,7 +553,19 @@ class LateRelease(ToggledConfinement):
                 "release_threshold":5
             }
     }
+<<<<<<< HEAD
 
+=======
+
+class NormalReleasePartialDeconfinement(NormalRelease):
+    CONFIG = {
+        "simulation_config":
+            {
+                "post_confinement_sdf": 0.5
+            }
+        }
+
+>>>>>>> eb365dfee107e4ff13e5f87b0ae225cdd3bc5418
 class YoungAndOldPeople(RunSimpleDeconfSimulation):
     CONFIG = {
         "simulation_config": {
@@ -629,19 +654,20 @@ class School(YoungAndOldPeople):
 class SchoolClosingReOpening(School):
     CONFIG = {
         "simulation_config": {
-            "city_population": 200,
+            "city_population": 250,
             "box_size":7,
-        "initial_infected_ratio": 0.1,
+        "initial_infected_ratio": 0.02,
         "initial_recovered_ratio": 0.05,
         },
 
-        "sd_probability": 0.8,
+        "sd_probability": 0.65,
         "delay_time": 0.5,
-        "p_infection_per_day": 0.1,
-        "school_frequency": 0.1,
+        "p_infection_per_day": 0.2,
+        "school_frequency": 0.05,
         "original_frequency":0.00,
-        "closing_proportion":0.05,
-        "opening_proportion":0.15,
+        "closing_proportion":0.1, #any above proportion should get the school closed.
+        "opening_recovered_proportion":0.15, #Above proportion already recoveres should get the school opened
+        "opening_infected_proportion": 0.15, #Except if the infected proportion is above this threshold
         "is_open":0,
     }
     def close(self):
@@ -675,9 +701,11 @@ class SchoolClosingReOpening(School):
 
     def run_until_zero_infections(self):
         while True:
+            has_made_a_modif=0
             if (self.is_open) & (self.get_infectious_proportion() > self.closing_proportion):
                 self.close()
-            if (not self.is_open) & (self.get_recovered_proportion() > self.opening_proportion):
+                has_made_a_modif=1
+            if (not has_made_a_modif) & (not self.is_open) & (self.get_recovered_proportion() > self.opening_recovered_proportion) & (self.get_infectious_proportion()<self.opening_infected_proportion):
                 self.open()
             self.wait(5)
             if self.simulation.get_status_counts()[1] == 0:

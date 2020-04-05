@@ -798,6 +798,21 @@ class Square(Rectangle):
             **kwargs
         )
 
+class SmallSquare(Rectangle):
+    CONFIG = {
+        "side_length": 1.0,
+    }
+
+    def __init__(self, **kwargs):
+        digest_config(self, kwargs)
+        Rectangle.__init__(
+            self,
+            height=self.side_length,
+            width=self.side_length,
+            **kwargs
+        )
+
+
 
 class RoundedRectangle(Rectangle):
     CONFIG = {
