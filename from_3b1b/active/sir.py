@@ -1357,6 +1357,7 @@ class DelayedSocialDistancing(RunSimpleSimulation):
                 if(not AlreadyAVLine) :
                     print('v_line')
                     self.graph.add_v_line()
+                    box.set_stroke(YELLOW, 3)
                     self.play(
                         self.tr_slider.get_change_anim(self.simulation.travel_rate),
                         self.sd_slider.get_change_anim(new_factor),
@@ -2050,16 +2051,17 @@ class Deconf_box_RatioPerBox_Market(Deconf_box_RatioPerBox, CentralMarket):
             person.last_shopping_trip = -3
             person.is_shopping = False
 
-        square = Square()
-        square.set_height(0.2)
-        square.set_color(WHITE)
-        square.move_to(self.simulation.boxes[0].get_center())
-        self.add(square)
+        for box in self.simulation.boxes:
+            square = Square()
+            square.set_height(0.2)
+            square.set_color(WHITE)
+            square.move_to(box.get_center())
+            self.add(square)
 
         self.simulation.add_updater(
             lambda m, dt: self.add_travel_anims(m, dt)
         )
-        Deconf_box.setup(self)
+        #Deconf_box.setup(self)
         
         
 class CentralMarketLargePopulation(CentralMarket, LargerCity):
