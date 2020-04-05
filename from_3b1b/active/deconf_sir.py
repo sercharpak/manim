@@ -2,7 +2,7 @@
 import sys
 sys.path.insert(0, './from_3b1b/active/')
 from manimlib.imports import *
-from sir import Person, SIRSimulation, RunSimpleSimulation, COLOR_MAP, DelayedSocialDistancing, PiPerson
+from sir import Person, ValueSlider, SIRSimulation, RunSimpleSimulation, COLOR_MAP, DelayedSocialDistancing, PiPerson
 
 # Change of the color map to take into account the new categories
 COLOR_MAP["D"] = PURPLE # a dead person
@@ -226,7 +226,7 @@ class OldPerson(SmallSquarePerson):
         }
 
 
-class MultiPopSIRSimulation(SIRSimulation):
+class MultiPopSIRSimulation(SIRSimulationDead):
     CONFIG = {
         "n_cities": 1,
         "city_population": 100,
@@ -408,7 +408,7 @@ class RunSimpleDeconfSimulation(RunSimpleSimulation):
         self.add_total_dead_label()
 
     def add_simulation(self):
-        self.simulation = SIRDeconfSim(**self.simulation_config)
+        self.simulation = MultiPopSIRSimulation(**self.simulation_config)
         self.add(self.simulation)
 
     def add_total_dead_label(self):
@@ -493,10 +493,33 @@ class ToggledConfinement(RunSimpleDeconfSimulationHospital):
             "post_confinement_sdf": 0.0
         }
     }
+    
+    def add_sliders(self):
+        slider = ValueSlider(
+        'Social Distance Factor',
+        value=0,
+        x_min=0,
+        x_max=0.5,
+        tick_frequency=1,
+        numbers_with_elongated_ticks=[],
+        numbers_to_show=range(2),
+        decimal_number_config={
+            "num_decimal_places": 0,
+        })
+        
+        slider.match_width(self.graph)
+        slider.next_to(self.graph, DOWN, buff=0.2 * self.graph.get_height())
+        self.add(slider)
+        self.sd_slider = slider
+    
+        self.sd_slider.marker.set_color(YELLOW)
+        self.sd_slider.name.set_color(YELLOW)
 
     def construct(self):
+        self.add_sliders()
         self.release_confinement()
         self.run_until_zero_infections()
+        
     def policy_change(self):
         infected_count = self.simulation.get_status_counts()[1]
         if not self.confinement:
@@ -505,15 +528,23 @@ class ToggledConfinement(RunSimpleDeconfSimulationHospital):
             return infected_count < self.simulation.release_threshold
 
     def activate_confinement(self):
+        target_factor = 1.0
         for person in self.simulation.people:
-            person.social_distance_factor=1
+            person.social_distance_factor=target_factor
+        
+        print(target_factor)
+        self.play(self.sd_slider.get_change_anim(target_factor))
 
         self.simulation.travel_rate=0.0
 
         self.confinement=True
     def release_confinement(self):
+        target_factor = self.simulation.post_confinement_sdf
         for person in self.simulation.people:
-            person.social_distance_factor=self.simulation.post_confinement_sdf
+            person.social_distance_factor=target_factor
+        
+        print(target_factor)
+        self.play(self.sd_slider.get_change_anim(target_factor))
         self.confinement=False
 
     def run_until_zero_infections(self):
@@ -527,7 +558,7 @@ class ToggledConfinement(RunSimpleDeconfSimulationHospital):
                     break
                 else:
                     self.activate_confinement()
-        self.compute_dead()
+        #self.compute_dead()
 
 
 class EarlyRelease(ToggledConfinement):
