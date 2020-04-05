@@ -53,6 +53,10 @@ class SquarePerson(Person):
     def get_body(self):
         return Square()
 
+class SmallSquarePerson(Person):
+    def get_body(self):
+        return SmallSquare()
+
 class TrianglePerson(Person):
     def get_body(self):
         return Triangle()
@@ -67,15 +71,15 @@ class DisrespectfulCitizen(TrianglePerson):
     CONFIG = {
         "social_distance_factor": 0
         }
-class YoungPerson(DotPerson):
+class YoungPerson(SmallDotPerson):
     CONFIG = {
-        "social_distance_factor": 0.9,
+        "social_distance_factor": 0.8,
         "goes_to_school_probability": 0.7,
         #"infection_radius": 0.3,
         }
-class OldPerson(PiPerson):
+class OldPerson(SmallSquarePerson):
     CONFIG = {
-        "social_distance_factor": 1.0,
+        "social_distance_factor": 0.9,
         #"infection_radius": 0.25,
         "goes_to_school_probability": -1.0,
         }
@@ -490,19 +494,20 @@ class School(YoungAndOldPeople):
 class SchoolClosingReOpening(School):
     CONFIG = {
         "simulation_config": {
-            "city_population": 200,
+            "city_population": 250,
             "box_size":7,
-        "initial_infected_ratio": 0.1,
+        "initial_infected_ratio": 0.02,
         "initial_recovered_ratio": 0.05,
         },
 
-        "sd_probability": 0.7,
+        "sd_probability": 0.65,
         "delay_time": 0.5,
-        "p_infection_per_day": 0.3,
-        "school_frequency": 0.1,
+        "p_infection_per_day": 0.2,
+        "school_frequency": 0.05,
         "original_frequency":0.00,
-        "closing_proportion":0.05,
-        "opening_proportion":0.10,
+        "closing_proportion":0.1, #any above proportion should get the school closed.
+        "opening_recovered_proportion":0.15, #Above proportion already recoveres should get the school opened
+        "opening_infected_proportion": 0.15, #Except if the infected proportion is above this threshold
         "is_open":0,
     }
     def close(self):
@@ -536,9 +541,11 @@ class SchoolClosingReOpening(School):
 
     def run_until_zero_infections(self):
         while True:
+            has_made_a_modif=0
             if (self.is_open) & (self.get_infectious_proportion() > self.closing_proportion):
                 self.close()
-            if (not self.is_open) & (self.get_recovered_proportion() > self.opening_proportion):
+                has_made_a_modif=1
+            if (not has_made_a_modif) & (not self.is_open) & (self.get_recovered_proportion() > self.opening_recovered_proportion) & (self.get_infectious_proportion()<self.opening_infected_proportion):
                 self.open()
             self.wait(5)
             if self.simulation.get_status_counts()[1] == 0:
