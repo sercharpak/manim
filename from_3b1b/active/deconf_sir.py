@@ -7,7 +7,11 @@ from sir import Person, SIRSimulation, RunSimpleSimulation
 class DotPerson(Person):
     def get_body(self):
         return Dot()
-
+    
+class SmallDotPerson(Person):
+    def get_body(self):
+        return SmallDot()
+    
 class SquarePerson(Person):
     def get_body(self):
         return Square()
@@ -130,52 +134,87 @@ class RunSimpleDeconfSimulation(RunSimpleSimulation):
 class PartiallyRespectedMeasures(RunSimpleDeconfSimulation):
     CONFIG = {
         "simulation_config": {
+        "n_cities": 9,
         "population_ratios": {
-            RespectfulCitizen: 0.5, 
-            DisrespectfulCitizen: 0.5}
+            RespectfulCitizen: 0.8, 
+            DisrespectfulCitizen: 0.2}
         }
     }
     
 class ToggledConfinement(RunSimpleSimulation):
     CONFIG = {
         "simulation_config": {
-            "p_infection_per_day": 0.2
-        },
-        "activation_treshold": 10}
+            "n_cities" : 1,
+            "city_population": 250,
+            "person_type": SmallDotPerson,
+            "person_config": {
+                "infection_radius": 0.4
+            },
+            "p_infection_per_day": 0.3,
+            "activation_threshold": 50,
+            "release_threshold": 15
+        }
+    }
     
     def construct(self):
-        self.confinement = False
+        self.release_confinement()
+        self.run_until_zero_infections()
+    def policy_change(self):
+        infected_count = self.simulation.get_status_counts()[1]
+        if not self.confinement:
+            return infected_count == 0 or infected_count > self.simulation.activation_threshold
+        else:
+            return infected_count < self.simulation.release_threshold
+    
+    def activate_confinement(self):
+        for person in self.simulation.people:
+            person.social_distance_factor=1
+            
+        self.simulation.travel_rate=0.0
+        
+        self.confinement=True
+    def release_confinement(self):
         for person in self.simulation.people:
             person.social_distance_factor=0
-            
-        self.run_until_zero_infections()
-    def check_if_confinement(self):
+        self.confinement=False
         
-        infected_count = self.simulation.get_status_counts()[1]
-        
-        if not self.confinement:
-            if infected_count > self.activation_treshold:
-                for person in self.simulation.people:
-                    person.social_distance_factor=1
-                self.confinement = True
-        else:
-            if infected_count < self.activation_treshold:
-                for person in self.simulation.people:
-                    person.social_distance_factor=0
-                self.confinement = False
-    
-    def run_until_zero_infections(self):
+    def run_until_zero_infections(self):           
         while True:
-            self.wait(5)
-            self.check_if_confinement()
-            if self.simulation.get_status_counts()[1] == 0:
-                self.wait(5)
-                break
+            self.wait_until(self.policy_change)
+            if self.confinement:
+                self.release_confinement()
+            else:
+                if self.simulation.get_status_counts()[1] == 0:
+                    self.wait(5)
+                    break
+                else:
+                    self.activate_confinement()
 
             
     
     
-    
-    
+class EarlyRelease(ToggledConfinement):
+    CONFIG = {
+        "simulation_config":
+            {
+                "release_threshold":50
+            }
+    }
 
+class NormalRelease(ToggledConfinement):
+    CONFIG = {
+        "simulation_config":
+            {
+                "release_threshold":30
+            }
+    }
+        
+class LateRelease(ToggledConfinement):
+    CONFIG = {
+        "simulation_config":
+            {
+                "release_threshold":5
+            }
+    }
+    
 
