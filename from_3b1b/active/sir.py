@@ -176,9 +176,10 @@ class Person(VGroup):
 
         # Avoid walls
         wall_force = np.zeros(3)
+        epsilon=0.00000001
         for i in range(2):
-            to_lower = center[i] - self.dl_bound[i]
-            to_upper = self.ur_bound[i] - center[i]
+            to_lower = center[i] - self.dl_bound[i]+epsilon
+            to_upper = self.ur_bound[i] - center[i]+epsilon
 
             # Bounce
             if to_lower < 0:
@@ -188,10 +189,10 @@ class Person(VGroup):
                 self.velocity[i] = -abs(self.velocity[i])
                 self.set_coord(self.ur_bound[i], i)
 
-            # Repelling force
+            
             wall_force[i] += max((-1 / self.wall_buffer + 1 / to_lower), 0)
             wall_force[i] -= max((-1 / self.wall_buffer + 1 / to_upper), 0)
-        total_force += wall_force
+            total_force += wall_force
 
         # Apply force
         self.velocity += total_force * dt
@@ -248,6 +249,43 @@ class Person(VGroup):
 class DotPerson(Person):
     def get_body(self):
         return Dot()
+    
+class SmallDotPerson(Person):
+    CONFIG ={
+        "fill_opacity":1.0
+    }
+    def get_body(self):
+        return SmallDot()
+    
+class SquarePerson(Person):
+    CONFIG ={
+        "fill_opacity":1.0
+    }
+    def get_body(self):
+        return Square()
+
+class TrianglePerson(Person):
+    CONFIG ={
+        "fill_opacity":1.0
+    }
+    def get_body(self):
+        return Triangle()
+    
+class EllipsePerson(Person):
+    CONFIG ={
+        "fill_opacity":1.0
+    }
+    def get_body(self):
+        return Ellipse()
+    
+class RectanglePerson(Person):
+    CONFIG ={
+        "fill_opacity":1.0
+    }
+    def get_body(self):
+        return Rectangle()
+
+
 
 
 class PiPerson(Person):
@@ -326,11 +364,14 @@ class SIRSimulation(VGroup):
 
     def add_people(self):
         people = VGroup()
+        count=-1
         for box in self.boxes:
+            count=count+1
+            #print(count)
             dl_bound = box.get_corner(DL)
             ur_bound = box.get_corner(UR)
             box.people = VGroup()
-            for x in range(self.city_population):
+            for x in range(self.city_population[count]):
                 person = self.person_type(
                     dl_bound=dl_bound,
                     ur_bound=ur_bound,
@@ -343,7 +384,11 @@ class SIRSimulation(VGroup):
                 person.box = box
                 box.people.add(person)
                 people.add(person)
-
+                #print(count)
+                #print(person.box,'person.box')
+                #print(box.people,'box.people')
+                #print(person.status)
+                
         # Choose a patient zero
         random.choice(people).set_status("I")
         self.add(people)
@@ -358,6 +403,8 @@ class SIRSimulation(VGroup):
                 ))
                 for status in ["S", "I"]
             ]
+            #print('s_group',len(s_group))
+            #print('i_group',len(i_group))
 
             for s_person in s_group:
                 for i_person in i_group:
@@ -409,6 +456,52 @@ class SIRSimulation(VGroup):
                     diffs = np.linalg.norm(repelled_centers - center, axis=1)
                     person.repulsion_points = repelled_centers[np.argsort(diffs)[1:person.n_repulsion_points + 1]]
 
+    def get_statusses_s_box_count(self):
+        s_counts=[]
+        for box in self.boxes:
+            s_group= [
+                list(filter(
+                    lambda m: m.status == status,
+                    box.people
+                ))
+                for status in ["S"]
+            ]
+            s_counts.append(len(s_group))
+            #print([len(s_group),len(i_group),len(r_group)])
+            #print(np.array([len(s_group),len(i_group),len(r_group)]))
+        print(s_counts)
+        return s_counts
+    
+    def get_statusses_i_box_count(self):
+        i_counts=[]
+        for box in self.boxes:
+            s_group= [
+                list(filter(
+                    lambda m: m.status == status,
+                    box.people
+                ))
+                for status in ["I"]
+            ]
+            i_counts.append(len(i_group))
+        print(i_counts)
+        return i_counts
+    
+    def get_statusses_r_box_count(self):
+        r_counts=[]
+        for box in self.boxes:
+            r_group= [
+                list(filter(
+                    lambda m: m.status == status,
+                    box.people
+                ))
+                for status in ["R"]
+            ]
+            r_counts.append(len(r_group[0]))
+            print('r_group',len(r_group[0]))
+        #print(r_counts)
+        return r_counts
+    
+    
     def get_status_counts(self):
         return np.array([
             len(list(filter(
@@ -417,11 +510,219 @@ class SIRSimulation(VGroup):
             )))
             for status in "SIR"
         ])
+            
+    
 
     def get_status_proportions(self):
         counts = self.get_status_counts()
         return counts / sum(counts)
 
+class Square_DeconfSim(Square):
+
+    CONFIG = {
+
+        "Deconf_status": False,
+
+    }
+    
+    def get_Square_status(self): 
+        return self.Deconf_status
+    
+    def set_Square_status(self,DeconfStatus ): 
+        self.Deconf_status=DeconfStatus
+    
+
+class SIRDeconfSim(SIRSimulation):
+    CONFIG={
+        "initial_infected_ratio": 0.1,
+        "initial_recovered_ratio": 0.1
+        }
+    
+    def add_boxes(self):
+        boxes = VGroup()
+        for x in range(self.n_cities):
+            box = Square_DeconfSim()
+#            print('Box status ',box.get_Square_status() )
+#            box.set_Square_status(True)
+#            print('Change Box status ',box.get_Square_status() )
+            box.set_height(self.box_size)
+            box.set_stroke(WHITE, 3)
+            boxes.add(box)
+        boxes.arrange_in_grid(buff=LARGE_BUFF)
+        self.add(boxes)
+        self.boxes = boxes
+    
+#    def add_people(self):
+#        people = VGroup()
+#        count=-1
+#        for box in self.boxes:
+#            count=count+1
+#            #print(count)
+#            dl_bound = box.get_corner(DL)
+#            ur_bound = box.get_corner(UR)
+#            box.people = VGroup()
+#            for x in range(self.city_population[count]):
+#                person = self.person_type(
+#                    dl_bound=dl_bound,
+#                    ur_bound=ur_bound,
+#                    **self.person_config
+#                )
+#                person.move_to([
+#                    interpolate(lower, upper, random.random())
+#                    for lower, upper in zip(dl_bound, ur_bound)
+#                ])
+#                person.box = box
+#                box.people.add(person)
+#                people.add(person)
+#                
+#                
+#        # CUSTOM CODE STARTS HERE
+#        # we count the total number of infected and recovered people over all boxes
+#        num_infected = int(self.initial_infected_ratio * np.sum(self.city_population))
+#        num_recovered = int(self.initial_recovered_ratio * np.sum(self.city_population))
+#        special_status = random.sample(list(people), num_infected + num_recovered)
+#        
+#        infected = special_status[:num_infected]
+#        recovered = special_status[num_infected:]
+#        
+#        for person in infected:
+#            person.set_status("I")
+#        for person in recovered:
+#            person.set_status("R")
+#        self.add(people)
+#        self.people = people
+        
+    def add_people(self):
+        people = VGroup()
+        count=-1
+        PersonType = [DotPerson, SmallDotPerson,SquarePerson,TrianglePerson,EllipsePerson,RectanglePerson]
+        for box in self.boxes:
+            count=count+1
+            #print(count)
+            dl_bound = box.get_corner(DL)
+            ur_bound = box.get_corner(UR)
+            box.people = VGroup()
+            self.person_type = PersonType[count]
+            for x in range(self.city_population[count]):
+                person = self.person_type(
+                    dl_bound=dl_bound,
+                    ur_bound=ur_bound,
+                    **self.person_config
+                )
+                person.move_to([
+                    interpolate(lower, upper, random.random())
+                    for lower, upper in zip(dl_bound, ur_bound)
+                ])
+                person.box = box
+                box.people.add(person)
+                people.add(person)
+                
+                
+        # CUSTOM CODE STARTS HERE
+        # we count the total number of infected and recovered people over all boxes
+        num_infected = int(self.initial_infected_ratio * np.sum(self.city_population))
+        num_recovered = int(self.initial_recovered_ratio * np.sum(self.city_population))
+        special_status = random.sample(list(people), num_infected + num_recovered)
+        
+        infected = special_status[:num_infected]
+        recovered = special_status[num_infected:]
+        
+        start_dates = np.arange(-self.infection_time, 1)
+        
+
+        for person in infected:
+            person.set_status("I")
+            person.infection_start_time = np.random.choice(start_dates)
+        for person in recovered:
+            person.set_status("R")
+        self.add(people)
+        self.people = people
+  
+    def get_status_deconf_box(self) :
+        boxStatut=[]
+        for box in self.boxes:
+            boxStatut.append(box.get_Square_status())
+        print('boxSatut ',boxStatut)
+        return boxStatut
+    
+    def get_time(self) :
+        return self.time
+    
+    def update_statusses(self, dt):
+        for box in self.boxes:
+            s_group, i_group = [
+                list(filter(
+                    lambda m: m.status == status,
+                    box.people
+                ))
+                for status in ["S", "I"]
+            ]
+            #print('s_group',len(s_group))
+            #print('i_group',len(i_group))
+
+            for s_person in s_group:
+                for i_person in i_group:
+                    dist = get_norm(i_person.get_center() - s_person.get_center())
+                    if dist < s_person.infection_radius and random.random() < self.p_infection_per_day * dt:
+                        s_person.set_status("I")
+                        i_person.num_infected += 1
+            for i_person in i_group:
+                if (i_person.time - i_person.infection_start_time) > self.infection_time:
+                    i_person.set_status("R")
+
+        # Travel
+        if self.travel_rate > 0:
+            path_func = path_along_arc(45 * DEGREES)
+            
+            AccessibleBoxes=[]
+            for box in self.boxes:
+                print('box', box)
+                if(box.get_Square_status()):
+                    AccessibleBoxes.append(box)
+            print('AccessibleBoxes', AccessibleBoxes)    
+            
+            for person in self.people:
+                # the box to which belong the person is deconfined (get_Square_status==TRUE)
+                if person.box.get_Square_status() :
+                    if random.random() < self.travel_rate * dt:
+                        #new_box = random.choice(np.nonzero(np.multiply(self.boxes, self.get_status_deconf_box())))
+                        print('self.boxes', self.boxes)
+                        #print('Subset self.boxes', self.boxes[self.get_status_deconf_box()])
+                        #new_box = random.choice(self.boxes[self.get_status_deconf_box()])
+                        new_box = random.choice(AccessibleBoxes)
+                        person.box.people.remove(person)
+                        new_box.people.add(person)
+                        person.box = new_box
+                        person.dl_bound = new_box.get_corner(DL)
+                        person.ur_bound = new_box.get_corner(UR)
+    
+                        person.old_center = person.get_center()
+                        person.new_center = new_box.get_center()
+                        anim = UpdateFromAlphaFunc(
+                            person,
+                            lambda m, a: m.move_to(path_func(
+                                m.old_center, m.new_center, a,
+                            )),
+                            run_time=1,
+                        )
+                        person.push_anim(anim)
+
+        # Social distancing
+        centers = np.array([person.get_center() for person in self.people])
+        if self.limit_social_distancing_to_infectious:
+            repelled_centers = np.array([
+                person.get_center()
+                for person in self.people
+                if person.symptomatic
+            ])
+        else:
+            repelled_centers = centers
+
+        if len(repelled_centers) > 0:
+            for center, person in zip(centers, self.people):
+                if person.social_distance_factor > 0:
+                    diffs = np.linalg.norm(repelled_centers - center, axis=1)
+                    person.repulsion_points = repelled_centers[np.argsort(diffs)[1:person.n_repulsion_points + 1]]
 
 class SIRGraph(VGroup):
     CONFIG = {
@@ -955,6 +1256,66 @@ class DelayedSocialDistancing(RunSimpleSimulation):
         for person in self.simulation.people:
             if random.random() < prob:
                 person.social_distance_factor = new_factor
+                
+    def change_social_distance_factor_box(self, new_factor, prob, box_to_deconf):
+        print('Enter change social distance')
+        
+        count=0
+        #print('self.simulation.boxes', self.simulation.boxes)
+#        for box in self.simulation.boxes:
+#            #print('box', box)
+#            if(box_to_deconf[count]==True):
+#                for person in box.people: 
+#                    #print('person',person)
+#                    if random.random() < prob:
+#                        #print('social_distance_factor',person.social_distance_factor)
+#                        person.social_distance_factor = new_factor
+#        for person in self.simulation.people:
+#            print('social_distance_factor',person.social_distance_factor)
+#        for box in self.simulation.boxes:
+##            s_group= [
+##                list(filter(
+##                    lambda m: m.status == status,
+##                    box.people
+##                ))
+##                for status in ["S"]
+##            ]
+#            people_box =list(box.people)
+#            print('people in box',people_box)
+#        for person in self.simulation.people : 
+#            print('box of people', person.box)
+        count=0
+        AlreadyAVLine=False
+        for box in self.simulation.boxes:
+            print('Box status before if', box.get_Square_status())
+            if(box_to_deconf[count]==True and not box.get_Square_status()):
+                box.set_Square_status(True)
+                people_box=list(box.people)
+                #print('people in box',people_box)
+                for P in people_box:
+                    if random.random() < prob:
+                        P.social_distance_factor = new_factor
+                        #print('P', P)
+                        #print('social_distance_factor',P.social_distance_factor)
+                print('At time ', self.simulation.get_time())
+                if(not AlreadyAVLine) :
+                    print('v_line')
+                    self.graph.add_v_line()
+                    self.play(
+                        self.tr_slider.get_change_anim(self.simulation.travel_rate),
+                        self.sd_slider.get_change_anim(new_factor),
+                    )
+                    AlreadyAVLine=True
+            count=count+1
+            print('Box status after if', box.get_Square_status())
+            
+            
+            
+            
+        
+                
+        
+
 
     def add_sliders(self):
         slider = ValueSlider(
@@ -1204,6 +1565,7 @@ class SimpleTravelSocialDistancePlusZeroTravel(SimpleTravelDelayedSocialDistanci
     }
 
     def construct(self):
+        print('Enter his construct')
         self.wait_until_infection_threshold(self.trigger_infection_count)
         self.change_social_distance_factor(
             self.target_sd_factor,
@@ -1221,6 +1583,7 @@ class SimpleTravelSocialDistancePlusZeroTravel(SimpleTravelDelayedSocialDistanci
 
 class SecondWave(SimpleTravelSocialDistancePlusZeroTravel):
     def run_until_zero_infections(self):
+        print('Enter his function')
         self.wait_until(lambda: self.simulation.get_status_counts()[1] < 10)
         self.change_social_distance_factor(0, 1)
         self.simulation.travel_rate = 0.02
@@ -1230,7 +1593,107 @@ class SecondWave(SimpleTravelSocialDistancePlusZeroTravel):
             self.sd_slider.get_change_anim(0),
         )
         super().run_until_zero_infections()
+        
+class Deconf_box(SimpleTravelSocialDistancePlusZeroTravel):
+    CONFIG= {
+            "Prop_recovered": 0.5,
+            "target_sd_factor": 2,
+            "target_travel_rate": 0.02,
+    "simulation_config": {
+            "initial_infected_ratio": 0.5,
+            "initial_recovered_ratio": 0.1,
+            }
+    }
+    
+    def add_simulation(self):
+        print('our add_simulation')
+        self.simulation = SIRDeconfSim(**self.simulation_config)
+        self.add(self.simulation)
+        
 
+    def add_sliders(self):
+        
+        xMin=0
+        xMax=0.1
+        tickFrequency=0.01
+        slider = ValueSlider(
+            "Travel rate",
+            self.simulation.travel_rate,
+            x_min=xMin,
+            x_max=xMax,
+            tick_frequency=tickFrequency,
+            numbers_with_elongated_ticks=[],
+            numbers_to_show=np.arange(xMin, xMax,tickFrequency),
+            decimal_number_config={
+                "num_decimal_places": 2,
+            }
+        )
+        slider.match_width(self.graph)
+        slider.next_to(self.graph, DOWN, buff=0.2 * self.graph.get_height())
+        self.add(slider)
+        self.tr_slider = slider
+        
+        DelayedSocialDistancing.add_sliders(self)
+
+        buff = 0.1 * self.graph.get_height()
+
+        self.tr_slider.scale(0.8, about_edge=UP)
+        self.tr_slider.next_to(self.graph, DOWN, buff=buff)
+
+        self.sd_slider.scale(0.8)
+        self.sd_slider.marker.set_color(YELLOW)
+        self.sd_slider.name.set_color(YELLOW)
+        self.sd_slider.next_to(self.tr_slider, DOWN, buff=buff)
+    
+    def construct(self):
+        print('Enter our construct')
+#        self.wait_until_infection_threshold(self.trigger_infection_count)
+#        self.change_social_distance_factor(
+#            self.target_sd_factor,
+#            self.sd_probability,
+#        )
+        #self.simulation.initial_infected_ratio= 0.5,
+        #self.simulation.travel_rate = self.target_travel_rate
+        #self.graph.add_v_line()
+        self.play(
+            self.tr_slider.get_change_anim(0),
+            #self.tr_slider.get_change_anim(self.target_travel_rate),
+            self.sd_slider.get_change_anim(self.target_sd_factor),
+        )
+
+        self.run_until_zero_infections()
+        
+    def wait_until_infection_threshold(self, threshold=0):
+        self.wait_until(lambda: self.simulation.get_status_counts()[1] > threshold, 3)
+
+    def run_until_zero_infections(self):
+        print('Enter Our function')
+        #Box_to_deconfine=np.divide(self.simulation.get_statusses_r_box_count(),self.simulation.city_population)>self.Prop_recovered
+        #print('Box_to_deconfine',Box_to_deconfine)
+        #print('r_counts',self.simulation.get_statusses_r_box_count())
+        #print('ratio:',np.divide(self.simulation.get_statusses_r_box_count(),self.simulation.city_population))
+        #self.wait_until(lambda: self.simulation.get_status_counts()[1] < 10)
+        #self.wait_until(lambda: np.any(Box_to_deconfine),30)
+       
+        #self.get_wait_time_progression(DEFAULT_WAIT_TIME, None)
+        
+        # while all boxes haven't been deconfined 
+        maxTime=20
+        while not np.all(self.simulation.get_status_deconf_box()) and self.simulation.get_time()<maxTime   :
+            print('Entering while')
+            self.wait_until(lambda: np.any(np.logical_and((np.divide(self.simulation.get_statusses_r_box_count(),self.simulation.city_population)>self.Prop_recovered), np.logical_not(self.simulation.get_status_deconf_box()))), maxTime)
+            Box_to_deconfine=np.divide(self.simulation.get_statusses_r_box_count(),self.simulation.city_population)>self.Prop_recovered
+            print('Box_to_deconfine',Box_to_deconfine)
+            self.change_social_distance_factor_box(0, 1, Box_to_deconfine)
+            #self.change_travel_rate()
+#            self.simulation.travel_rate = 0
+#            self.graph.add_v_line()
+#            self.play(
+#                self.tr_slider.get_change_anim(0.02),
+#                self.sd_slider.get_change_anim(0),
+#            )
+            #super().run_until_zero_infections()
+        self.wait_until(None)
 
 class SimpleTravelSocialDistancePlusZeroTravel99p(SimpleTravelSocialDistancePlusZeroTravel):
     CONFIG = {
