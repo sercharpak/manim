@@ -65,7 +65,7 @@ class DisrespectfulCitizen(TrianglePerson):
         }
 class YoungPerson(DotPerson):
     CONFIG = {
-        "social_distance_factor": 1.0,
+        "social_distance_factor": 0.9,
         "goes_to_school_probability": 0.7,
         #"infection_radius": 0.3,
         }
@@ -450,13 +450,13 @@ class SchoolClosingReOpening(School):
         "initial_recovered_ratio": 0.05,
         },
 
-        "sd_probability": 0.8,
+        "sd_probability": 0.7,
         "delay_time": 0.5,
-        "p_infection_per_day": 0.1,
+        "p_infection_per_day": 0.3,
         "school_frequency": 0.1,
         "original_frequency":0.00,
         "closing_proportion":0.05,
-        "opening_proportion":0.15,
+        "opening_proportion":0.10,
         "is_open":0,
     }
     def close(self):
