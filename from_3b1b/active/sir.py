@@ -179,6 +179,12 @@ class Person(VGroup):
         for i in range(2):
             to_lower = center[i] - self.dl_bound[i]
             to_upper = self.ur_bound[i] - center[i]
+            
+            epsilon = 1e-3
+            if abs(to_lower) < epsilon:
+                to_lower = epsilon
+            if abs(to_upper) < epsilon:
+                to_upper = epsilon
 
             # Bounce
             if to_lower < 0:
@@ -203,7 +209,7 @@ class Person(VGroup):
 
         # Update position
         self.shift(self.velocity * dt)
-
+        
     def update_infection_ring(self, dt):
         ring = self.infection_ring
         if not (self.infection_start_time <= self.time <= self.infection_end_time + 1):
