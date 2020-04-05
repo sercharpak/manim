@@ -9,7 +9,148 @@ COLOR_MAP["D"] = PURPLE # a dead person
 COLOR_MAP["C"] = WHITE # a clean person
 COLOR_MAP["H"] = GREEN # a hospitalized person
 
+class SIRSimulationDead(SIRSimulation):
+    CONFIG = {
+        "dying": True,
+        "hospital": False,
+        "max_hospital": 20
+    }
+
+    def add_boxes(self):
+        boxes = VGroup()
+        self.cities = 1
+        if self.hospital:
+            self.n_cities = 2
+        for x in range(self.n_cities):
+            box = Square()
+            box.set_height(self.box_size)
+            box.set_stroke(WHITE, 3)
+            boxes.add(box)
+            self.box_size = 2
+        boxes.arrange_in_grid(buff=LARGE_BUFF)
+        self.add(boxes)
+        self.boxes = boxes
+
+    def get_status_counts(self):
+        list_temp = np.array([
+            len(list(filter(
+                lambda m: m.status == status,
+                self.people
+            )))
+            for status in "SIHCD"
+        ])
+        return np.array([list_temp[0], list_temp[1] + list_temp[2], list_temp[3] + list_temp[4]])
+
+    def move_hospital_two_ways(self, person, id_box):
+        path_func = path_along_arc(45 * DEGREES)
+        new_box = self.boxes[id_box]
+        person.box.people.remove(person)
+        new_box.people.add(person)
+        person.box = new_box
+        person.dl_bound = new_box.get_corner(DL)
+        person.ur_bound = new_box.get_corner(UR)
+
+        person.old_center = person.get_center()
+        person.new_center = new_box.get_center()
+        anim = UpdateFromAlphaFunc(
+            person,
+            lambda m, a: m.move_to(path_func(
+                m.old_center, m.new_center, a,
+            )),
+            run_time=1,
+        )
+        person.push_anim(anim)
+
+    def kill_people(self, person, proba_dying):
+        person.set_status(np.random.choice(["C", "D"], 1, True, [1-proba_dying, proba_dying])[0])
+        if person.status == "C":
+            self.move_hospital_two_ways(person, 0)
+    def to_hospital(self, person):
+        person.set_status(np.random.choice(["C", "H"], 1, True, [1-person.proba_hospital, person.proba_hospital])[0])
+        if person.status == "H":
+            self.move_hospital_two_ways(person, 1)
+
+    def update_statusses(self, dt):
+        self.total_dead = 0
+        self.total_hospital = 0
+        for box in self.boxes:
+            s_group, i_group, d_group, h_group = [
+                list(filter(
+                    lambda m: m.status == status,
+                    box.people
+                ))
+                for status in ["S", "I", "D", "H"]
+            ]
+            for s_person in s_group:
+                for i_person in i_group:
+                    dist = get_norm(i_person.get_center() - s_person.get_center())
+                    if dist < s_person.infection_radius and random.random() < self.p_infection_per_day * dt:
+                        s_person.set_status("I")
+                        i_person.num_infected += 1
+            for i_person in i_group:
+                if (i_person.time - i_person.infection_start_time) > self.infection_time:
+                    if self.hospital:
+                        self.to_hospital(i_person)
+                    elif self.dying:
+                        self.kill_people(i_person, i_person.proba_dying)
+                    else:
+                        i_person.set_status("R")
+            too_much = len(h_group) - self.max_hospital
+            for h_person in h_group:
+                if too_much > 0:
+                    h_person.set_status("D")
+                    too_much -= 1
+                if (h_person.time - h_person.infection_start_time) > 2*self.infection_time:
+                    self.kill_people(h_person, h_person.proba_dying) # can be changed with the one in hospital
+            self.total_dead += len(d_group)
+            self.total_hospital += len(h_group)
+
+
+        # Travel
+        if self.travel_rate > 0:
+            path_func = path_along_arc(45 * DEGREES)
+            for person in self.people:
+                if random.random() < self.travel_rate * dt:
+                    new_box = random.choice(self.boxes)
+                    person.box.people.remove(person)
+                    new_box.people.add(person)
+                    person.box = new_box
+                    person.dl_bound = new_box.get_corner(DL)
+                    person.ur_bound = new_box.get_corner(UR)
+
+                    person.old_center = person.get_center()
+                    person.new_center = new_box.get_center()
+                    anim = UpdateFromAlphaFunc(
+                        person,
+                        lambda m, a: m.move_to(path_func(
+                            m.old_center, m.new_center, a,
+                        )),
+                        run_time=1,
+                    )
+                    person.push_anim(anim)
+
+        # Social distancing
+        centers = np.array([person.get_center() for person in self.people])
+        if self.limit_social_distancing_to_infectious:
+            repelled_centers = np.array([
+                person.get_center()
+                for person in self.people
+                if person.symptomatic
+            ])
+        else:
+            repelled_centers = centers
+
+        if len(repelled_centers) > 0:
+            for center, person in zip(centers, self.people):
+                if person.social_distance_factor > 0:
+                    diffs = np.linalg.norm(repelled_centers - center, axis=1)
+                    person.repulsion_points = repelled_centers[np.argsort(diffs)[1:person.n_repulsion_points + 1]]
+
 class PersonGeneralized(Person):
+    CONFIG = {
+        "proba_dying": 0.1,
+        "proba_hospital": 0.5,
+    }
     def set_status(self, status, run_time=1):
         start_color = self.color_map[self.status]
         end_color = self.color_map[status]
@@ -41,19 +182,19 @@ class PersonGeneralized(Person):
         self.status = status
 
 
-class DotPerson(Person):
+class DotPerson(PersonGeneralized):
     def get_body(self):
         return Dot()
-    
-class SmallDotPerson(Person):
+
+class SmallDotPerson(PersonGeneralized):
     def get_body(self):
         return SmallDot()
-    
-class SquarePerson(Person):
+
+class SquarePerson(PersonGeneralized):
     def get_body(self):
         return Square()
 
-class TrianglePerson(Person):
+class TrianglePerson(PersonGeneralized):
     def get_body(self):
         return Triangle()
 
@@ -79,6 +220,7 @@ class OldPerson(PiPerson):
         #"infection_radius": 0.25,
         "goes_to_school_probability": -1.0,
         }
+
 
 class MultiPopSIRSimulation(SIRSimulation):
     CONFIG = {
@@ -134,15 +276,15 @@ class MultiPopSIRSimulation(SIRSimulation):
         self.add(people)
         self.people = people
 
-class SIRSimulationH(SIRSimulation):
-    CONFIG={
-        "person_type": SquarePerson,
+class SIRDeconfSimHospital(SIRSimulationDead):
+    CONFIG = {
+        "initial_infected_ratio": 0.01,
+        "initial_recovered_ratio": 0.0,
+        "dying": True,
+        "hospital": True,
         "n_cities": 2,
-        "city_population": 100,
-        "max_hospital": 5, # max number of people in the hospital
-        "proba_dead_hospital": 0.1, # You have a chance of not dying
-        "proba_dead_hospital_full": 0.7 # The hospital is full
-    }
+        "max_hospital": 30,
+        }
 
     def add_boxes(self):
         boxes = VGroup()
@@ -152,32 +294,21 @@ class SIRSimulationH(SIRSimulation):
             box.set_height(self.box_size)
             box.set_stroke(WHITE, 3)
             boxes.add(box)
-            self.box_size = 2
         boxes.arrange_in_grid(buff=LARGE_BUFF)
         self.add(boxes)
         self.boxes = boxes
 
-    def get_status_counts(self):
-        list_temp = np.array([
-            len(list(filter(
-                lambda m: m.status == status,
-                self.people
-            )))
-            for status in "SIHCD"
-        ])
-        return np.array([list_temp[0], list_temp[1] + list_temp[2], list_temp[3] + list_temp[4]])
-
     def add_people(self):
         people = VGroup()
+        self.person_type = DotPerson
+        self.hospital = True
         for id_box, box in enumerate(self.boxes):
             dl_bound = box.get_corner(DL)
             ur_bound = box.get_corner(UR)
             box.people = VGroup()
-            if id_box > 0:
+            if id_box == 1:
                 continue
-            self.city_population = 100
             for x in range(self.city_population):
-                self.person_type = SquarePerson
                 person = self.person_type(
                     dl_bound=dl_bound,
                     ur_bound=ur_bound,
@@ -190,93 +321,36 @@ class SIRSimulationH(SIRSimulation):
                 person.box = box
                 box.people.add(person)
                 people.add(person)
+
+
         # CUSTOM CODE STARTS HERE
-        list_status = ["S"]
-        for individual in people:
-            individual.set_status(random.choice(list_status))
-        people[0].set_status("I")
-        # Choose a patient zero
-        #random.choice(people).set_status("I")
+        num_infected = int(self.initial_infected_ratio * self.city_population * self.n_cities)
+        num_recovered = int(self.initial_recovered_ratio * self.city_population * self.n_cities)
+        special_status = random.sample(list(people), num_infected + num_recovered)
+
+        infected = special_status[:num_infected]
+        recovered = special_status[num_infected:]
+
+        for person in infected:
+            person.set_status("I")
+        for person in recovered:
+            person.set_status("R")
         self.add(people)
         self.people = people
-    def update_statusses(self, dt):
-        for id_box, box in enumerate(self.boxes):
-            s_group, i_group, h_group, r_group, d_group = [
-                list(filter(
-                    lambda m: m.status == status,
-                    box.people
-                ))
-                for status in ["S", "I", "H", "C", "D"]
-            ]
-            self.total_hospital = len(h_group)
-            self.total_dead = len(d_group)
-
-            for s_person in s_group:
-                for i_person in i_group:
-                    dist = get_norm(i_person.get_center() - s_person.get_center())
-                    if dist < s_person.infection_radius and random.random() < self.p_infection_per_day * dt:
-                        s_person.set_status("I")
-                        i_person.num_infected += 1
-            for r_person in r_group:
-                if id_box == 1:
-                    path_func = path_along_arc(45 * DEGREES)
-                    new_box = self.boxes[0]
-                    r_person.box.people.remove(r_person)
-                    new_box.people.add(r_person)
-                    r_person.box = new_box
-                    r_person.dl_bound = new_box.get_corner(DL)
-                    r_person.ur_bound = new_box.get_corner(UR)
-
-                    r_person.old_center = r_person.get_center()
-                    r_person.new_center = new_box.get_center()
-                    anim = UpdateFromAlphaFunc(
-                        r_person,
-                        lambda m, a: m.move_to(path_func(
-                            m.old_center, m.new_center, a,
-                        )),
-                        run_time=1,
-                    )
-                    r_person.push_anim(anim)
-            for i_person in i_group:
-                if (i_person.time - i_person.infection_start_time) > self.infection_time:
-                    # The person is either in hospital or cured (luck to be change)
-                    i_person.set_status(random.choice(["C", "H"]))
-            for h_person in h_group:
-                if (h_person.time - h_person.infection_start_time) > 1.5*self.infection_time and len(h_group) < self.max_hospital: # to change
-                    h_person.set_status(np.random.choice(["C", "D"], size=1, replace=True, p=[1-self.proba_dead_hospital, self.proba_dead_hospital])[0])
-                elif (h_person.time - h_person.infection_start_time) > 1.5*self.infection_time and len(h_group) >= self.max_hospital:
-                    h_person.set_status(np.random.choice(["C", "D"], 1, True, [1-self.proba_dead_hospital_full, self.proba_dead_hospital_full])[0])
-                if id_box > 0:
-                    continue
-                path_func = path_along_arc(45 * DEGREES)
-                new_box = self.boxes[1]
-                h_person.box.people.remove(h_person)
-                new_box.people.add(h_person)
-                h_person.box = new_box
-                h_person.dl_bound = new_box.get_corner(DL)
-                h_person.ur_bound = new_box.get_corner(UR)
-
-                h_person.old_center = h_person.get_center()
-                h_person.new_center = new_box.get_center()
-                anim = UpdateFromAlphaFunc(
-                    h_person,
-                    lambda m, a: m.move_to(path_func(
-                        m.old_center, m.new_center, a,
-                    )),
-                    run_time=1,
-                )
-                h_person.push_anim(anim)
 
 
-class SIRDeconfSim(SIRSimulation):
+class SIRDeconfSim(SIRSimulationDead):
     CONFIG={
         "initial_infected_ratio": 0.1,
-        "initial_recovered_ratio": 0.1
+        "initial_recovered_ratio": 0.0,
+        "dying": True,
+        "hospital": False
         }
 
     def add_people(self):
         people = VGroup()
-        for box in self.boxes:
+        self.person_type = DotPerson
+        for id_box, box in enumerate(self.boxes):
             dl_bound = box.get_corner(DL)
             ur_bound = box.get_corner(UR)
             box.people = VGroup()
@@ -312,8 +386,73 @@ class SIRDeconfSim(SIRSimulation):
 
 
 class RunSimpleDeconfSimulation(RunSimpleSimulation):
+    def setup(self):
+        self.add_simulation()
+        self.position_camera()
+        self.add_graph()
+        self.add_sliders()
+        #self.add_R_label()
+        self.add_total_cases_label()
+        self.add_total_dead_label()
+
     def add_simulation(self):
-        self.simulation = MultiPopSIRSimulation(**self.simulation_config)
+        self.simulation = SIRDeconfSim(**self.simulation_config)
+        self.add(self.simulation)
+
+    def add_total_dead_label(self):
+        label = VGroup(
+            TextMobject("\\# Dead cases = "),
+            Integer(1)
+        )
+        label.arrange(RIGHT)
+        label[1].align_to(label[0][0][1], DOWN)
+        label.set_color(PURPLE)
+        boxes = self.simulation.boxes
+        label.set_width(0.5 * boxes.get_width())
+        label.next_to(boxes, DOWN + LEFT, buff=0.03 * boxes.get_width())
+
+        label.add_updater(
+            lambda m: m[1].set_value(self.simulation.total_dead)
+        )
+        self.total_cases_label = label
+        self.add(label)
+
+    def run_until_zero_infections(self):
+        super().run_until_zero_infections()
+        self.compute_dead()
+
+    def compute_dead(self):
+        total_dead = 0
+        for person in self.simulation.people:
+            if person.status == "D":
+                total_dead += 1
+        print(total_dead)
+
+class RunSimpleDeconfSimulationHospital(RunSimpleDeconfSimulation):
+    def setup(self):
+        super().setup()
+        self.add_total_hospital_label()
+    def add_total_hospital_label(self):
+        label = VGroup(
+            TextMobject("\\# Hospital cases = "),
+            Integer(1),
+            TextMobject("/"),
+            TextMobject(str(self.simulation.max_hospital))
+        )
+        label.arrange(RIGHT)
+        label[1].align_to(label[0][0][1], DOWN)
+        label.set_color(GREEN)
+        boxes = self.simulation.boxes
+        label.set_width(0.5 * boxes.get_width())
+        label.next_to(boxes, DOWN, buff=0.03 * boxes.get_width())
+
+        label.add_updater(
+            lambda m: m[1].set_value(self.simulation.total_hospital)
+        )
+        self.total_cases_label = label
+        self.add(label)
+    def add_simulation(self):
+        self.simulation = SIRDeconfSimHospital(**self.simulation_config)
         self.add(self.simulation)
 
 class PartiallyRespectedMeasures(RunSimpleDeconfSimulation):
@@ -327,7 +466,7 @@ class PartiallyRespectedMeasures(RunSimpleDeconfSimulation):
         }
     }
 
-class ToggledConfinement(RunSimpleSimulation):
+class ToggledConfinement(RunSimpleDeconfSimulationHospital):
     CONFIG = {
         "simulation_config": {
             "n_cities" : 1,
@@ -341,7 +480,7 @@ class ToggledConfinement(RunSimpleSimulation):
             "release_threshold": 15
         }
     }
-    
+
     def construct(self):
         self.release_confinement()
         self.run_until_zero_infections()
@@ -351,20 +490,20 @@ class ToggledConfinement(RunSimpleSimulation):
             return infected_count == 0 or infected_count > self.simulation.activation_threshold
         else:
             return infected_count < self.simulation.release_threshold
-    
+
     def activate_confinement(self):
         for person in self.simulation.people:
             person.social_distance_factor=1
-            
+
         self.simulation.travel_rate=0.0
-        
+
         self.confinement=True
     def release_confinement(self):
         for person in self.simulation.people:
             person.social_distance_factor=0
         self.confinement=False
-        
-    def run_until_zero_infections(self):           
+
+    def run_until_zero_infections(self):
         while True:
             self.wait_until(self.policy_change)
             if self.confinement:
@@ -375,10 +514,9 @@ class ToggledConfinement(RunSimpleSimulation):
                     break
                 else:
                     self.activate_confinement()
+        self.compute_dead()
 
-            
-    
-    
+
 class EarlyRelease(ToggledConfinement):
     CONFIG = {
         "simulation_config":
@@ -394,7 +532,7 @@ class NormalRelease(ToggledConfinement):
                 "release_threshold":30
             }
     }
-        
+
 class LateRelease(ToggledConfinement):
     CONFIG = {
         "simulation_config":
@@ -402,7 +540,7 @@ class LateRelease(ToggledConfinement):
                 "release_threshold":5
             }
     }
-    
+
 class YoungAndOldPeople(RunSimpleDeconfSimulation):
     CONFIG = {
         "simulation_config": {
@@ -432,6 +570,7 @@ class School(YoungAndOldPeople):
         return position_to_return
 
     def setup(self):
+        print("he")
         super().setup()
         for person in self.simulation.people:
             person.last_school_trip = -3
@@ -544,69 +683,4 @@ class SchoolClosingReOpening(School):
             if self.simulation.get_status_counts()[1] == 0:
                 self.wait(1)
                 break
-
-
-class RunSimpleHospitalSimulation(RunSimpleSimulation):
-    def setup(self):
-        self.add_simulation()
-        self.position_camera()
-        self.add_graph()
-        self.add_sliders()
-        #self.add_R_label()
-        self.add_total_cases_label()
-        self.add_total_hospital_label()
-        self.add_total_dead_label()
-
-    def add_simulation(self):
-        self.simulation = SIRSimulationH(**self.simulation_config)
-        self.add(self.simulation)
-
-    def run_until_zero_infections(self):
-        while True:
-            self.wait(5)
-            if self.simulation.get_status_counts()[1] == 0:
-                self.wait(5)
-                break
-        total_dead = 0
-        for id_box, box in enumerate(self.simulation.boxes):
-            for person in box.people:
-                if person.status == "D":
-                    total_dead += 1
-        print(total_dead)
-
-    def add_total_hospital_label(self):
-        label = VGroup(
-            TextMobject("\\# Hospital cases = "),
-            Integer(1),
-            TextMobject("/"),
-            TextMobject(str(self.simulation.max_hospital))
-        )
-        label.arrange(RIGHT)
-        label[1].align_to(label[0][0][1], DOWN)
-        label.set_color(GREEN)
-        boxes = self.simulation.boxes
-        label.set_width(0.5 * boxes.get_width())
-        label.next_to(boxes, DOWN, buff=0.03 * boxes.get_width())
-
-        label.add_updater(
-            lambda m: m[1].set_value(self.simulation.total_hospital)
-        )
-        self.total_cases_label = label
-        self.add(label)
-    def add_total_dead_label(self):
-        label = VGroup(
-            TextMobject("\\# Dead cases = "),
-            Integer(1)
-        )
-        label.arrange(RIGHT)
-        label[1].align_to(label[0][0][1], DOWN)
-        label.set_color(PURPLE)
-        boxes = self.simulation.boxes
-        label.set_width(0.5 * boxes.get_width())
-        label.next_to(boxes, DOWN + LEFT, buff=0.03 * boxes.get_width())
-
-        label.add_updater(
-            lambda m: m[1].set_value(self.simulation.total_dead)
-        )
-        self.total_cases_label = label
-        self.add(label)
+        self.compute_dead()
