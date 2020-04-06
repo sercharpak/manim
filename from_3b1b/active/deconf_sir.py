@@ -77,7 +77,7 @@ class YoungPerson(SmallDotPerson):
         "goes_to_school_probability": 0.7,
         #"infection_radius": 0.3,
         }
-class OldPerson(SmallSquarePerson):
+class OldPerson(DotPerson):
     CONFIG = {
         "social_distance_factor": 0.9,
         #"infection_radius": 0.25,
