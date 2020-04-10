@@ -76,10 +76,13 @@ python3 ./manim.py example_scenes.py SquareToCircle -pl
     ```sh
     pip3 install C:\path\to\wheel\pycairo‑1.18.0‑cp37‑cp37m‑win32.whl
     ```
+    Or if a problem appear, you can try 
+    ```sh
+    conda install -c conda-forge pycairo
+    ```
 3. Install a LaTeX distribution. [MiKTeX](https://miktex.org/download) is recommended.
 
 4. [Install SoX](https://sourceforge.net/projects/sox/files/sox/).
-
 5. Install the remaining Python packages. Make sure that ``pycairo==1.17.1`` is changed to ``pycairo==1.18.0`` in requirements.txt.
     ```sh
     git clone https://github.com/3b1b/manim_deconfinement.git
